@@ -475,7 +475,7 @@ export interface PlayerToken extends PlayerItem {
   /** current / max clamped to 0..1, only when the HP bar is public. */
   hpFraction: number | null
   conditions: string[]
-  /** Pulsing ring: its initiative turn is active AND the tracker and that entry are visible to players. */
+  /** Pulsing ring: it is the turn players see (the tracker is shown; see shownTurn in the projection). */
   active: boolean
 }
 

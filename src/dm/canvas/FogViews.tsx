@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { Layer, Rect } from 'react-konva'
 import { FogLayer } from '../../canvas/FogLayer'
+import { InitiativeOverlay } from '../../canvas/InitiativeOverlay'
 import { PlayerSceneLayers } from '../../canvas/PlayerSceneLayers'
 import { visionSources } from '../../geometry/fog'
 import type { Rect as RectShape } from '../../geometry/types'
-import { projectForPlayers } from '../../projection/projectForPlayers'
-import { useActiveScene, useCampaign, useCampaignStore } from '../../store/campaign'
-import { useDevicePrefs } from '../../store/devicePrefs'
+import { useActiveScene, useCampaign } from '../../store/campaign'
 import { useUiStore } from '../../store/ui'
+import { usePlayersView } from './playersView'
 
 /**
  * The fog as the DM sees it (SPEC §5.6): the same regions players get, as a
@@ -35,25 +35,8 @@ export function DmFogTint({ cover }: { cover: RectShape }) {
  * TV by construction. The players' frame is outlined.
  */
 export function PlayersPreview({ cover, scale }: { cover: RectShape; scale: number }) {
-  const campaign = useCampaignStore((s) => s.campaign)
-  const liveDrag = useUiStore((s) => s.liveDrag)
-  const dmCamera = useUiStore((s) => s.dmCamera)
-  const dmViewport = useUiStore((s) => s.dmViewport)
-  const measurement = useUiStore((s) => s.measurement)
-  const tempTemplate = useUiStore((s) => s.tempTemplate)
+  const view = usePlayersView()
   const pings = useUiStore((s) => s.pings)
-  const prefs = useDevicePrefs()
-  const view = useMemo(
-    () =>
-      campaign
-        ? projectForPlayers(
-            campaign,
-            { liveDrag, dmCamera, dmViewport, measurement, tempTemplate },
-            prefs,
-          )
-        : null,
-    [campaign, liveDrag, dmCamera, dmViewport, measurement, tempTemplate, prefs],
-  )
   if (!view) return null
   if (view.blackout) {
     return (
@@ -80,4 +63,11 @@ export function PlayersPreview({ cover, scale }: { cover: RectShape; scale: numb
       </Layer>
     </>
   )
+}
+
+/** The players' initiative overlay during "Preview as players" (HTML, over the canvas). */
+export function PreviewInitiative() {
+  const view = usePlayersView()
+  if (!view || view.blackout || !view.scene.initiative) return null
+  return <InitiativeOverlay initiative={view.scene.initiative} />
 }

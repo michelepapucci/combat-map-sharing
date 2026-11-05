@@ -8,6 +8,7 @@ import { useActiveScene } from '../../store/campaign'
 import { setTool, useUiStore } from '../../store/ui'
 import { setSceneFog, type FogBrushShape } from '../../store/fogActions'
 import { placeLibraryEntry } from '../placement'
+import { PreviewInitiative } from './FogViews'
 import { importAndPlace } from '../uploads'
 import { buttonClass, CommitNumberInput } from '../../ui/controls'
 
@@ -377,7 +378,10 @@ export function CanvasHud() {
   return (
     <div className="pointer-events-none absolute inset-0">
       {preview ? (
-        <PreviewBanner />
+        <>
+          <PreviewInitiative />
+          <PreviewBanner />
+        </>
       ) : (
         <>
           {empty && tool === 'select' && <EmptyState />}

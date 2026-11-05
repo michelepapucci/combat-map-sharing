@@ -3,7 +3,7 @@ import { Circle, Group, Image, Path, Rect, Text } from 'react-konva'
 import { GLYPHS } from '../assets/builtin/glyphs'
 import { isBuiltinId, tokenLook } from '../assets/builtin/registry'
 import type { AssetImage } from '../assets/images'
-import { readableOn } from './color'
+import { hpColor, readableOn } from './color'
 import { useAssetImage } from './useAssetImage'
 
 export interface TokenShapeProps {
@@ -59,12 +59,6 @@ function conditionMark(condition: string): string {
 }
 
 const MAX_CONDITION_MARKS = 4
-
-function hpColor(fraction: number): string {
-  if (fraction > 0.5) return '#3fbf5f'
-  if (fraction > 0.25) return '#e0b52c'
-  return '#e04a3f'
-}
 
 /**
  * What players read around a token: conditions above it, the HP bar and the

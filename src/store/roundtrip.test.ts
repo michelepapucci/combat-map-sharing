@@ -37,6 +37,19 @@ import {
 } from './actions'
 import { getCampaign, loadCampaign, setUnrecorded, useCampaignStore } from './campaign'
 import { addFogEdit, clearFogEdits, resetExplored, setNpcVision, setSceneFog } from './fogActions'
+import {
+  addNamedEntry,
+  addTokensToInitiative,
+  endCombat,
+  moveAmongTies,
+  nextTurn,
+  previousTurn,
+  removeEntry,
+  rollInitiative,
+  setTrackerVisible,
+  toggleEntryVisibility,
+  updateEntry,
+} from './initiativeActions'
 import { addAssets, removeAsset, updateAsset } from './libraryActions'
 import {
   addScene,
@@ -62,6 +75,10 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+function entryIds(): Id[] {
+  return currentScene().initiative.entries.map((entry) => entry.id)
 }
 
 function tokenIds(): Id[] {
@@ -158,7 +175,47 @@ function run(seed: number, steps: number, focus: 'all' | 'fog'): void {
         draft.presentation.blackout = r() < 0.3
       }),
   ]
+  // The initiative tracker (milestone 6).
+  const initiativeActions: (() => void)[] = [
+    () => addTokensToInitiative(someIds()),
+    () => rollInitiative(someIds(), r),
+    () => addNamedEntry(r() < 0.2 ? longText() : name(), pick([0, 12, -3, num(-5000, 5000)])),
+    () => {
+      const ids = entryIds()
+      if (ids.length === 0) return
+      updateEntry(pick(ids), {
+        name: r() < 0.3 ? longText() : name(),
+        value: pick([0, 12, 12, num(-5000, 5000), Number.NaN]),
+        dexTiebreak: pick([null, 2, 2, num(-50, 50), Number.POSITIVE_INFINITY]),
+        visibility: pick(['auto', 'hidden', 'shown'] as const),
+      })
+    },
+    () => {
+      const ids = entryIds()
+      if (ids.length > 0) toggleEntryVisibility(pick(ids))
+    },
+    () => {
+      const ids = entryIds()
+      if (ids.length > 0) removeEntry(pick(ids))
+    },
+    () => {
+      const ids = entryIds()
+      if (ids.length > 1)
+        moveAmongTies(
+          pick(ids),
+          r() < 0.5 ? { targetId: pick(ids) } : { step: pick([-1, 1] as const) },
+        )
+    },
+    () => nextTurn(),
+    () => nextTurn(),
+    () => previousTurn(),
+    () => setTrackerVisible(r() < 0.5),
+    () => {
+      if (r() < 0.2) endCombat()
+    },
+  ]
   const base: (() => void)[] = [
+    ...initiativeActions,
     () => placeToken(pick(TOKEN_PRESETS).id, point(), { snap: r() < 0.5 }),
     () => placeImage(pick(PROP_ASSETS).id, point(), { snap: r() < 0.5 }),
     () => placeImage(pick(MAP_ASSETS).id, point(), { snap: r() < 0.5, anchor: 'top-left' }),

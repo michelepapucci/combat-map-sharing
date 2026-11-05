@@ -127,7 +127,7 @@ function projectScene(
 
   // Tokens: players always; NPCs and enemies only where currently visible. A
   // dragged NPC or enemy is checked at its live position, against committed vision.
-  const activeTokenId = activeInitiativeTokenId(scene)
+  const activeTokenId = shownTurn(scene)?.tokenId ?? null
   const tokens: PlayerToken[] = []
   if (scene.layerState.tokens.visible === true) {
     for (const token of scene.layers.tokens) {
@@ -155,7 +155,7 @@ function projectScene(
     fog,
     templates: playerTemplates(scene, ui),
     ruler: playerRuler(campaign.settings, scene.grid, ui.measurement),
-    initiative: playerInitiative(scene),
+    initiative: playerInitiative(scene, new Set(tokens.map((token) => token.id))),
     view: playerView(campaign, scene, ui, memory, explored, circles),
     lockedCellPx: positiveOrNull(prefs.lockedCellPx),
   }
@@ -320,37 +320,46 @@ function linkedToken(scene: Scene, entry: InitiativeEntry): Token | null {
 }
 
 /**
- * The linked token only while players could see it on the map (not hidden, its
- * layer visible): an entry the DM shows by name must not reveal the public HP
- * bar of a token that is hidden from players.
+ * The entry players see as the current turn. The active entry, when players may
+ * see it; during a hidden entry's turn, the last shown entry before it in turn
+ * order (from round 2 on, wrapping to the end of the previous round), so a gap
+ * in the highlight never tells players that a hidden creature is acting. Null
+ * before combat, while the tracker is not shown, or when nothing shown came first.
  */
-function presentToken(scene: Scene, entry: InitiativeEntry): Token | null {
-  const token = linkedToken(scene, entry)
-  if (!token || token.hidden !== false || scene.layerState.tokens.visible !== true) return null
-  return token
+function shownTurn(scene: Scene): InitiativeEntry | null {
+  const tracker = scene.initiative
+  if (tracker.visibleToPlayers !== true || tracker.activeEntryId === null) return null
+  const sorted = sortInitiative(tracker.entries)
+  const index = sorted.findIndex((entry) => entry.id === tracker.activeEntryId)
+  if (index < 0) return null
+  const steps = tracker.round > 1 ? sorted.length : index + 1
+  for (let k = 0; k < steps; k++) {
+    const entry = sorted[(index - k + sorted.length) % sorted.length]
+    if (entry && effectiveVisibility(entry, scene) === 'shown') return entry
+  }
+  return null
 }
 
-/** The token whose turn is active, only while the tracker and that entry are shown. */
-function activeInitiativeTokenId(scene: Scene): Id | null {
-  const { initiative } = scene
-  if (initiative.visibleToPlayers !== true || initiative.activeEntryId === null) return null
-  const entry = initiative.entries.find((e) => e.id === initiative.activeEntryId)
-  if (!entry || effectiveVisibility(entry, scene) !== 'shown') return null
-  return entry.tokenId
-}
-
-/** Names only, in turn order; hidden entries are omitted without placeholders. */
-function playerInitiative(scene: Scene): PlayerInitiative | null {
+/**
+ * Names only, in turn order; hidden entries are omitted without placeholders. A
+ * public HP fraction is sent only for a token players get on the map right now
+ * (`sentTokens`): an entry shown by name never reveals the health of a creature
+ * that is hidden, fogged or gone (Decision 67).
+ */
+function playerInitiative(scene: Scene, sentTokens: ReadonlySet<Id>): PlayerInitiative | null {
   const tracker = scene.initiative
   if (tracker.visibleToPlayers !== true) return null
+  const turn = shownTurn(scene)
   const entries: PlayerInitiative['entries'] = []
   for (const entry of sortInitiative(tracker.entries)) {
     if (effectiveVisibility(entry, scene) !== 'shown') continue
+    const token =
+      entry.tokenId !== null && sentTokens.has(entry.tokenId) ? linkedToken(scene, entry) : null
     entries.push({
       id: entry.id,
       name: entry.name,
-      active: entry.id === tracker.activeEntryId,
-      hpFraction: hpFraction(presentToken(scene, entry)?.hp ?? null),
+      active: entry.id === turn?.id,
+      hpFraction: hpFraction(token?.hp ?? null),
     })
   }
   return { round: tracker.round, entries }

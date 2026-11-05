@@ -5,6 +5,7 @@ import { getAssetBlob } from '../persistence/assetBlobs'
 import type { Id, PlayerViewState } from '../state/types'
 import { connectPlayer } from '../sync/playerClient'
 import { PlayerCanvas, type PlayerPing } from './PlayerCanvas'
+import { InitiativeOverlay } from '../canvas/InitiativeOverlay'
 
 /** Hides the mouse pointer after a moment without movement (the window is on a TV). */
 function useAutoHidingCursor(): boolean {
@@ -112,10 +113,13 @@ export function PlayerApp() {
       {view.blackout ? (
         <Blackout splashAssetId={view.splashAssetId} />
       ) : (
-        <PlayerCanvas
-          scene={view.scene}
-          pings={pings.filter((ping) => ping.sceneId === view.scene.sceneId)}
-        />
+        <>
+          <PlayerCanvas
+            scene={view.scene}
+            pings={pings.filter((ping) => ping.sceneId === view.scene.sceneId)}
+          />
+          {view.scene.initiative && <InitiativeOverlay initiative={view.scene.initiative} />}
+        </>
       )}
       {dmGone && (
         <p

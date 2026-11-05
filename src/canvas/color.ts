@@ -24,3 +24,10 @@ export function readableOn(background: string): string {
   // Contrast with white is 1.05 / (l + 0.05); with #111 (l ~ 0.0056) it is (l + 0.05) / 0.0556.
   return 1.05 / (l + 0.05) >= (l + 0.05) / 0.0556 ? '#ffffff' : '#111111'
 }
+
+/** Health bar color by remaining fraction: green above half, amber above a quarter, red. */
+export function hpColor(fraction: number): string {
+  if (fraction > 0.5) return '#3fbf5f'
+  if (fraction > 0.25) return '#e0b52c'
+  return '#e04a3f'
+}

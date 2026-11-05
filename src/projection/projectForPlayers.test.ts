@@ -287,7 +287,8 @@ describe('projectForPlayers on the sample campaign', () => {
             badge: 'A',
             hpFraction: 0.75,
             conditions: ['prone'],
-            active: false,
+            // The lair action's turn is hidden: players still see Aria's turn (the last shown one).
+            active: true,
           },
           {
             // In Aria's 60 ft (840 px) vision: shown, without its private label and HP.
@@ -329,10 +330,11 @@ describe('projectForPlayers on the sample campaign', () => {
           },
         ],
         ruler: null,
-        // The lair action (active, explicitly hidden) is omitted.
+        // The lair action (active, explicitly hidden) is omitted, and its turn shows
+        // as Aria's, the last shown turn (round 2 wraps back), never as a gap.
         initiative: {
           round: 2,
-          entries: [{ id: 'init-1', name: 'Aria', active: false, hpFraction: 0.75 }],
+          entries: [{ id: 'init-1', name: 'Aria', active: true, hpFraction: 0.75 }],
         },
         view: { x: 140, y: 70, width: 1680, height: 945 },
         lockedCellPx: null,
@@ -825,6 +827,15 @@ function tracked(init: Partial<Scene['initiative']> = {}, tokens?: Token[]) {
   return makeCampaign(scene)
 }
 
+/** The entry players see highlighted and the ringed tokens. */
+function highlighted(init: Partial<Scene['initiative']>) {
+  const s = project(tracked(init))
+  return {
+    entry: s.initiative?.entries.find((e) => e.active)?.id ?? null,
+    ring: s.tokens.filter((t) => t.active).map((t) => t.id),
+  }
+}
+
 describe('initiative', () => {
   it('is null while the tracker is not shown to players, with no active ring', () => {
     const s = project(tracked({ visibleToPlayers: false }))
@@ -855,14 +866,49 @@ describe('initiative', () => {
     expect(activeIds(tracked({ activeEntryId: 'lair' }))).toStrictEqual([])
     expect(activeIds(tracked({ activeEntryId: null }))).toStrictEqual([])
 
-    // The active entry is explicitly hidden: no highlight anywhere, token not ringed.
+    // The active entry is explicitly hidden: the goblin is not ringed, and the
+    // highlight stays on the last shown entry before it (its token is hidden: no ring).
     const campaign = tracked()
     const goblinTurn = campaign.scenes[0]?.initiative.entries[0]
     if (!goblinTurn) throw new Error('missing entry')
     goblinTurn.visibility = 'hidden'
     const s = project(campaign)
     expect(s.tokens.some((t) => t.active)).toBe(false)
-    expect(s.initiative?.entries.some((e) => e.active)).toBe(false)
+    expect(s.initiative?.entries.filter((e) => e.active).map((e) => e.id)).toStrictEqual([
+      'lurker-shown',
+    ])
+  })
+
+  it('a hidden turn keeps the previous shown turn highlighted, never a gap', () => {
+    // Turn order: secret 30 (hidden), lurker-auto 20 (hidden), gone 18 (hidden),
+    // lurker-shown 15, goblin 12, lair 8, orc 8.
+    expect(highlighted({ activeEntryId: 'gone-turn' })).toStrictEqual({
+      entry: 'orc-turn', // round 3: wraps back to the end of round 2
+      ring: ['orc'],
+    })
+    // Round 1: nothing shown has acted yet.
+    expect(highlighted({ activeEntryId: 'gone-turn', round: 1 })).toStrictEqual({
+      entry: null,
+      ring: [],
+    })
+    expect(highlighted({ activeEntryId: 'lair' })).toStrictEqual({ entry: 'lair', ring: [] })
+  })
+
+  it('no HP bar in the tracker for a creature players cannot see on the map', () => {
+    const campaign = tracked()
+    const scene = campaign.scenes[0]
+    if (!scene) throw new Error('no scene')
+    // Fog on and no vision: the goblin is in the dark, so it is not sent at all.
+    scene.fog.enabled = true
+    const s = project(campaign)
+    expect(s.tokens.map((t) => t.id)).toStrictEqual([])
+    const goblin = s.initiative?.entries.find((e) => e.id === 'goblin-turn')
+    expect(goblin).toStrictEqual({
+      id: 'goblin-turn',
+      name: 'Entry goblin-turn',
+      active: true,
+      hpFraction: null,
+    })
   })
 
   it('never sends values, tiebreaks, manual order or token links', () => {

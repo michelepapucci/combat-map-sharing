@@ -1,4 +1,15 @@
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Lock, LockOpen, Pencil, Trash } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  Eye,
+  EyeOff,
+  Lock,
+  LockOpen,
+  Pencil,
+  Swords,
+  Trash,
+} from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { findItem } from '../state/sceneOps'
 import {
@@ -10,6 +21,7 @@ import {
   toggleLocked,
 } from '../store/actions'
 import { useActiveScene } from '../store/campaign'
+import { addTokensToInitiative, tokensNotInInitiative } from '../store/initiativeActions'
 import { useUiStore } from '../store/ui'
 import type { Icon } from '../ui/controls'
 import { MOD } from './shortcuts'
@@ -111,6 +123,18 @@ export function ContextMenu() {
       icon: anyUnlocked ? Lock : LockOpen,
       run: () => toggleLocked(ids),
     },
+    ...(tokenSelected
+      ? [
+          {
+            label: 'Add to initiative',
+            icon: Swords,
+            disabled: tokensNotInInitiative(scene, ids).length === 0,
+            run: () => {
+              addTokensToInitiative(ids)
+            },
+          },
+        ]
+      : []),
     { label: 'Duplicate', shortcut: `${MOD}+D`, icon: Copy, run: () => duplicateItems(ids) },
     { label: 'Bring forward', icon: ArrowUp, run: () => reorderItems(ids, 'forward') },
     { label: 'Send backward', icon: ArrowDown, run: () => reorderItems(ids, 'backward') },

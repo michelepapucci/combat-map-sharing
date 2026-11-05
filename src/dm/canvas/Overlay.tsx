@@ -2,6 +2,7 @@ import type Konva from 'konva'
 import { useLayoutEffect, useRef } from 'react'
 import { Circle, Group, Label, Line, Path, Rect, Tag, Text, Transformer } from 'react-konva'
 import { parseHexColor } from '../../canvas/color'
+import { ActiveTurnRing } from '../../canvas/ActiveTurnRing'
 import { PingRipple } from '../../canvas/PingRipple'
 import { TokenShape } from '../../canvas/TokenShape'
 import { screenToWorld, worldToScreen } from '../../geometry/camera'
@@ -14,6 +15,7 @@ import type { Rect as RectShape } from '../../geometry/types'
 import { allItems, findItem, isItemMovable } from '../../state/sceneOps'
 import type { FogEditMode, Id, Item, Scene, Token } from '../../state/types'
 import { transformItems, type ItemGeometry } from '../../store/actions'
+import { activeToken } from '../../store/initiativeActions'
 import { useActiveScene, useCampaign } from '../../store/campaign'
 import { useUiStore, type FogDraft } from '../../store/ui'
 import { useCssColor } from './useCssColor'
@@ -447,8 +449,17 @@ export function Overlay({ marquee, calibration }: OverlayProps) {
       })
     : []
 
+  const turn = activeToken(scene)
+
   return (
     <>
+      {turn && scene.layerState.tokens.visible && (
+        <ActiveTurnRing
+          x={liveDrag?.[turn.id]?.x ?? turn.x}
+          y={liveDrag?.[turn.id]?.y ?? turn.y}
+          radius={turn.width / 2}
+        />
+      )}
       {sighted.map((token) => (
         <VisionRing
           key={token.id}

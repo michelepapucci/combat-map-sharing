@@ -14,6 +14,7 @@ import {
 import { useCampaignStore } from '../store/campaign'
 import { isModalOpen, notify, setSelection, setTool, useUiStore } from '../store/ui'
 import { getPointerWorld } from './canvas/pointer'
+import { nextTurn, previousTurn } from '../store/initiativeActions'
 import { closeFogPolygon, removeLastFogCorner } from './fogTool'
 import { flushSave } from './session'
 
@@ -59,6 +60,13 @@ export const SHORTCUT_GROUPS: readonly {
         action: 'Measure, area of effect (later milestones)',
       },
       { keys: ['?'], action: 'This cheat sheet' },
+    ],
+  },
+  {
+    title: 'Combat',
+    rows: [
+      { keys: ['N'], action: 'Next turn (starts combat; a new round after the last)' },
+      { keys: ['Shift+N'], action: 'Previous turn' },
     ],
   },
   {
@@ -182,6 +190,12 @@ export function handleShortcut(event: KeyboardEvent): boolean {
       return true
     case 'f':
       setTool('fog')
+      return true
+    case 'n':
+      // Holding the key must not race through several turns.
+      if (event.repeat) return true
+      if (event.shiftKey) previousTurn()
+      else nextTurn()
       return true
     case '?':
       useUiStore.setState({ shortcutsOpen: true, contextMenu: null })

@@ -293,6 +293,19 @@ export function TokenDetails({ token }: { token: Token }) {
     <div className="space-y-3">
       <LabelFields token={token} />
       <VisionField token={token} />
+      {token.kind !== 'player' && (
+        <Field label="Initiative modifier (Roll for selected adds it to d20)">
+          <CommitNumberInput
+            value={token.initiativeModifier}
+            min={-99}
+            max={99}
+            step={1}
+            placeholder="+0"
+            onCommit={(initiativeModifier) => updateItem(token.id, { initiativeModifier })}
+            onClear={() => updateItem(token.id, { initiativeModifier: null })}
+          />
+        </Field>
+      )}
       <HpFields token={token} />
       <ConditionsField token={token} />
       <Field label="DM notes (never shown to players)">

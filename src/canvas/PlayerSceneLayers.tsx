@@ -8,6 +8,7 @@ import { GridShape } from './GridShape'
 import { ItemImage } from './ItemImage'
 import { PingRipple } from './PingRipple'
 import { TokenShape } from './TokenShape'
+import { ActiveTurnRing } from './ActiveTurnRing'
 
 /** A ping in a window's own clock: when it started there. */
 export interface ScenePing {
@@ -65,6 +66,7 @@ export function PlayerSceneLayers({
   clipToView: boolean
 }) {
   const { grid, view } = scene
+  const turnTokens = scene.tokens.filter((token) => token.active === true)
   const clip = clipToView
     ? { clipX: view.x, clipY: view.y, clipWidth: view.width, clipHeight: view.height }
     : {}
@@ -112,6 +114,16 @@ export function PlayerSceneLayers({
           </FadeIn>
         ))}
       </Layer>
+      {/* The current turn's ring on its own small layer: its pulse never redraws the tokens. */}
+      {turnTokens.length > 0 && (
+        <Layer listening={false} {...clip}>
+          {turnTokens.map((token) => (
+            <FadeIn key={`turn:${token.id}`} animate={fresh.has(token.id)}>
+              <ActiveTurnRing x={token.x} y={token.y} radius={token.width / 2} />
+            </FadeIn>
+          ))}
+        </Layer>
+      )}
       {scene.fog && <FogLayer cover={cover} fog={scene.fog} mode="player" />}
       <Layer listening={false} {...clip}>
         {pings.map((ping) => (

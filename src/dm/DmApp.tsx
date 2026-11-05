@@ -13,6 +13,7 @@ import {
 import { useEffect } from 'react'
 import { useTheme } from '../app/theme'
 import { AssetDialog } from '../panels/AssetDialog'
+import { InitiativePanel } from '../panels/InitiativePanel'
 import { LayersPanel } from '../panels/LayersPanel'
 import { LibraryPanel } from '../panels/LibraryPanel'
 import { PlayerViewPanel } from '../panels/PlayerViewPanel'
@@ -171,6 +172,7 @@ function Workspace() {
           className="flex min-h-0 flex-col gap-5 overflow-y-auto border-l border-border bg-surface p-3"
         >
           <PlayerViewPanel />
+          <InitiativePanel />
           <LibraryPanel />
           <LayersPanel />
           <PropertiesPanel />

@@ -104,7 +104,12 @@ export const CommitTextInput = forwardRef<HTMLInputElement, CommitTextInputProps
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={() => {
-          if (!cancelled.current && draft !== value) onCommit(draft)
+          if (!cancelled.current && draft !== value) {
+            onCommit(draft)
+            // Show the stored value again if the edit was refused (an empty name):
+            // an accepted one changes `value` and resyncs the draft anyway.
+            setDraft(value)
+          }
           cancelled.current = false
         }}
         onKeyDown={(event) => {
@@ -172,23 +177,31 @@ export function CommitTextarea({
   )
 }
 
-/** A number input committed on Enter or blur; invalid input reverts. */
+/**
+ * A number input committed on Enter or blur; invalid input reverts. With
+ * `onClear`, the value may be unset: null shows as empty, and clearing the
+ * field calls onClear.
+ */
 export function CommitNumberInput({
   value,
   onCommit,
+  onClear,
   min,
   max,
   step,
+  placeholder,
   'aria-label': ariaLabel,
 }: {
-  value: number
+  value: number | null
   onCommit: (value: number) => void
+  onClear?: () => void
   min?: number
   max?: number
   step?: number
+  placeholder?: string
   'aria-label'?: string
 }) {
-  const shown = String(Math.round(value * 100) / 100)
+  const shown = value === null ? '' : String(Math.round(value * 100) / 100)
   const [draft, setDraft] = useState(shown)
   const [lastShown, setLastShown] = useState(shown)
   const cancelled = useRef(false)
@@ -204,6 +217,10 @@ export function CommitNumberInput({
     // Unchanged text: the display is rounded, so committing it would alter the value.
     if (draft === shown) return
     const parsed = Number(draft)
+    if (draft.trim() === '' && onClear && value !== null) {
+      onClear()
+      return
+    }
     if (draft.trim() === '' || !Number.isFinite(parsed)) {
       setDraft(shown)
       return
@@ -219,6 +236,7 @@ export function CommitNumberInput({
       min={min}
       max={max}
       step={step}
+      placeholder={placeholder}
       aria-label={ariaLabel}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
