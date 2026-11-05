@@ -1,62 +1,79 @@
-import {
-  CircleDashed,
-  CloudFog,
-  MonitorUp,
-  Moon,
-  MousePointer2,
-  Radar,
-  Ruler,
-  Sun,
-  Swords,
-} from 'lucide-react'
-import type { ComponentType, SVGProps } from 'react'
+import { Keyboard, MonitorUp, Moon, Redo2, Sun, Swords, Undo2 } from 'lucide-react'
+import { useEffect } from 'react'
 import { useTheme } from '../app/theme'
+import { LayersPanel } from '../panels/LayersPanel'
+import { LibraryPanel } from '../panels/LibraryPanel'
+import { PropertiesPanel } from '../panels/PropertiesPanel'
 import { openPlayerWindow } from '../player/openPlayerWindow'
+import { createCampaign } from '../state/defaults'
+import { pruneSelection, redoAction, undoAction } from '../store/actions'
+import { loadCampaign, useCampaignStore } from '../store/campaign'
+import { useUiStore } from '../store/ui'
+import { IconButton } from '../ui/controls'
+import { DmCanvas } from './canvas/DmCanvas'
+import { ContextMenu } from './ContextMenu'
+import { MOD, useShortcuts } from './shortcuts'
+import { ShortcutsDialog } from './ShortcutsDialog'
+import { Toolbar } from './Toolbar'
 
-interface ToolStub {
-  label: string
-  shortcut: string
-  Icon: ComponentType<SVGProps<SVGSVGElement>>
+function HistoryButtons() {
+  const undoLabel = useCampaignStore((s) => s.past.at(-1)?.label ?? null)
+  const redoLabel = useCampaignStore((s) => s.future.at(-1)?.label ?? null)
+  return (
+    <div className="flex items-center gap-0.5">
+      <IconButton
+        icon={Undo2}
+        label={undoLabel ? `Undo ${undoLabel}` : 'Undo'}
+        title={undoLabel ? `Undo: ${undoLabel} (${MOD}+Z)` : `Nothing to undo (${MOD}+Z)`}
+        disabled={undoLabel === null}
+        onClick={undoAction}
+      />
+      <IconButton
+        icon={Redo2}
+        label={redoLabel ? `Redo ${redoLabel}` : 'Redo'}
+        title={
+          redoLabel ? `Redo: ${redoLabel} (${MOD}+Shift+Z)` : `Nothing to redo (${MOD}+Shift+Z)`
+        }
+        disabled={redoLabel === null}
+        onClick={redoAction}
+      />
+    </div>
+  )
 }
 
-// Placeholders for the left toolbar; the tools themselves arrive in milestones 2-7.
-const TOOLS: readonly ToolStub[] = [
-  { label: 'Select', shortcut: 'V', Icon: MousePointer2 },
-  { label: 'Measure', shortcut: 'M', Icon: Ruler },
-  { label: 'Area of effect', shortcut: 'A', Icon: CircleDashed },
-  { label: 'Fog', shortcut: 'F', Icon: CloudFog },
-  { label: 'Ping', shortcut: 'P', Icon: Radar },
-]
-
-/**
- * DM window (`#/dm`). Milestone 1 renders the application shell only: top bar,
- * left toolbar, canvas area and right-hand panels, wired to the theme toggle and
- * the "Open player window" button.
- */
-export function DmApp() {
+function Workspace() {
   const [theme, setTheme] = useTheme()
   const nextTheme = theme === 'dark' ? 'light' : 'dark'
+  useShortcuts()
 
   return (
-    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
+    // Mouse clicks must not leave focus on a button: Space (pan) would press it again.
+    // Keyboard activation (detail === 0) keeps focus where it is.
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- focus management only
+    <div
+      className="grid h-full grid-rows-[auto_minmax(0,1fr)]"
+      onClick={(event) => {
+        const button = event.target instanceof Element ? event.target.closest('button') : null
+        if (event.detail > 0 && button && !button.closest('[role="menu"], dialog')) button.blur()
+      }}
+    >
       <header className="flex items-center gap-3 border-b border-border bg-surface px-3 py-2">
         <Swords aria-hidden className="size-5 text-accent" />
         <h1 className="text-sm font-semibold tracking-wide">Combat Map</h1>
         <span className="text-xs text-fg-muted">DM view</span>
+        <HistoryButtons />
         <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
+          <IconButton
+            icon={Keyboard}
+            label="Keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+            onClick={() => useUiStore.setState({ shortcutsOpen: true })}
+          />
+          <IconButton
+            icon={theme === 'dark' ? Sun : Moon}
+            label={`Switch to ${nextTheme} theme`}
             onClick={() => setTheme(nextTheme)}
-            className="rounded-md p-2 text-fg-muted hover:bg-surface-3 hover:text-fg"
-            aria-label={`Switch to ${nextTheme} theme`}
-            title={`Switch to ${nextTheme} theme`}
-          >
-            {theme === 'dark' ? (
-              <Sun aria-hidden className="size-4" />
-            ) : (
-              <Moon aria-hidden className="size-4" />
-            )}
-          </button>
+          />
           <button
             type="button"
             onClick={() => openPlayerWindow()}
@@ -68,62 +85,40 @@ export function DmApp() {
         </div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)_18rem]">
-        <nav
-          aria-label="Tools"
-          className="flex flex-col gap-1 border-r border-border bg-surface p-1.5"
-        >
-          {TOOLS.map(({ label, shortcut, Icon }) => (
-            <button
-              key={label}
-              type="button"
-              disabled
-              className="rounded-md p-2 text-fg-muted disabled:opacity-50"
-              aria-label={`${label} (${shortcut})`}
-              title={`${label} (${shortcut}) · coming soon`}
-            >
-              <Icon aria-hidden className="size-5" />
-            </button>
-          ))}
-        </nav>
-
-        <main
-          aria-label="Map canvas"
-          className="flex items-center justify-center bg-bg p-6 text-center"
-        >
-          <div className="max-w-md space-y-2">
-            <p className="text-lg font-medium">Drop a map image here or pick a default map</p>
-            <p className="text-sm text-fg-muted">
-              The canvas, grid and tools arrive in milestone 2. For now you can switch the theme and
-              open the player window.
-            </p>
-          </div>
+      <div className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)_19rem]">
+        <Toolbar />
+        <main aria-label="Map canvas" className="min-h-0 min-w-0">
+          <DmCanvas />
         </main>
-
         <aside
           aria-label="Library and properties"
-          className="flex flex-col gap-3 border-l border-border bg-surface p-3"
+          className="flex min-h-0 flex-col gap-5 overflow-y-auto border-l border-border bg-surface p-3"
         >
-          <section aria-labelledby="library-heading" className="space-y-1">
-            <h2
-              id="library-heading"
-              className="text-xs font-semibold tracking-wider text-fg-muted uppercase"
-            >
-              Library
-            </h2>
-            <p className="text-sm text-fg-muted">Tokens, props and maps.</p>
-          </section>
-          <section aria-labelledby="properties-heading" className="space-y-1">
-            <h2
-              id="properties-heading"
-              className="text-xs font-semibold tracking-wider text-fg-muted uppercase"
-            >
-              Properties
-            </h2>
-            <p className="text-sm text-fg-muted">Select something on the map to edit it.</p>
-          </section>
+          <LibraryPanel />
+          <LayersPanel />
+          <PropertiesPanel />
         </aside>
       </div>
+      <ContextMenu />
+      <ShortcutsDialog />
     </div>
   )
+}
+
+/**
+ * DM window (`#/dm`). Loads a campaign on mount (a fresh one until milestone 3
+ * adds persistence) and renders the editor once it is there.
+ */
+export function DmApp() {
+  const loaded = useCampaignStore((s) => s.campaign !== null)
+
+  useEffect(() => {
+    if (!useCampaignStore.getState().campaign) loadCampaign(createCampaign())
+    // Keep the selection valid whatever changed the campaign (undo, layer locks, deletes).
+    return useCampaignStore.subscribe((state, previous) => {
+      if (state.campaign !== previous.campaign) pruneSelection()
+    })
+  }, [])
+
+  return loaded ? <Workspace /> : null
 }
