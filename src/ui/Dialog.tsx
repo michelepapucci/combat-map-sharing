@@ -3,8 +3,8 @@ import { useEffect, useId, useRef, type ReactNode } from 'react'
 
 /**
  * A native modal dialog (focus trap, Esc to close, inert background) with a
- * title bar. Rendered only while open; `onClose` runs on Esc, the close button,
- * or `close()` from inside.
+ * title bar. Rendered only while open: the parent unmounts it to close it.
+ * `onClose` runs on Esc or the close button.
  */
 export function Dialog({
   title,
@@ -22,12 +22,13 @@ export function Dialog({
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
 
+  // Opened on mount and never closed from a cleanup: under React StrictMode (dev)
+  // effects run twice, and close() would fire a 'close' event that dismisses the
+  // dialog right after it opened. Unmounting removes the element, which also
+  // ends its modal state.
   useEffect(() => {
     const dialog = ref.current
     if (dialog && !dialog.open) dialog.showModal()
-    return () => {
-      if (dialog?.open) dialog.close()
-    }
   }, [])
 
   return (
