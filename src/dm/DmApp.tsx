@@ -10,14 +10,11 @@ import {
   Swords,
   Undo2,
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 import { useTheme } from '../app/theme'
 import { AssetDialog } from '../panels/AssetDialog'
-import { InitiativePanel } from '../panels/InitiativePanel'
-import { LayersPanel } from '../panels/LayersPanel'
-import { LibraryPanel } from '../panels/LibraryPanel'
-import { PlayerViewPanel } from '../panels/PlayerViewPanel'
-import { PropertiesPanel } from '../panels/PropertiesPanel'
+import { loadPanelLayout, useHasDockedPanels } from './layout/panelLayout'
+import { FloatingPanels, Sidebar } from './layout/Panels'
 import { openPlayerWindow } from '../player/openPlayerWindow'
 import { pruneSelection, redoAction, undoAction } from '../store/actions'
 import { useCampaign, useCampaignStore } from '../store/campaign'
@@ -111,6 +108,9 @@ function Workspace() {
   const [theme, setTheme] = useTheme()
   const nextTheme = theme === 'dark' ? 'light' : 'dark'
   useShortcuts()
+  const docked = useHasDockedPanels()
+  // This device's panel layout, before the first paint (no flash of the default layout).
+  useLayoutEffect(() => loadPanelLayout(), [])
 
   return (
     // Mouse clicks must not leave focus on a button: Space (pan) would press it again.
@@ -158,7 +158,9 @@ function Workspace() {
         </div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)_19rem]">
+      <div
+        className={`grid min-h-0 ${docked ? 'grid-cols-[auto_minmax(0,1fr)_19rem]' : 'grid-cols-[auto_minmax(0,1fr)]'}`}
+      >
         <Toolbar />
         <main
           aria-label="Map canvas"
@@ -167,17 +169,9 @@ function Workspace() {
           <SceneBar />
           <DmCanvas />
         </main>
-        <aside
-          aria-label="Library and properties"
-          className="flex min-h-0 flex-col gap-5 overflow-y-auto border-l border-border bg-surface p-3"
-        >
-          <PlayerViewPanel />
-          <InitiativePanel />
-          <LibraryPanel />
-          <LayersPanel />
-          <PropertiesPanel />
-        </aside>
+        <Sidebar />
       </div>
+      <FloatingPanels />
       <ContextMenu />
       <ShortcutsDialog />
       <Dialogs />

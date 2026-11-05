@@ -33,7 +33,7 @@ import {
   CommitTextInput,
   Field,
   inputClass,
-  SectionHeading,
+  SubsectionHeading,
   Toggle,
 } from '../ui/controls'
 
@@ -334,27 +334,42 @@ function GridSettings() {
   )
 }
 
-/** Properties of the selection, or the scene's grid settings when nothing is selected. */
+/** Properties of the selection (the scene's grid and fog are in the Scene panel). */
 export function PropertiesPanel() {
   const scene = useActiveScene()
   const selection = useUiStore((s) => s.selection)
   const refs = selection.flatMap((id) => findItem(scene, id) ?? [])
   const single = refs.length === 1 ? refs[0] : undefined
-  const heading = refs.length === 0 ? 'Grid' : 'Properties'
+  if (refs.length === 0) {
+    return (
+      <p className="text-xs text-fg-muted">
+        Select a token or item on the map to edit it. Grid and fog settings are in the Scene panel.
+      </p>
+    )
+  }
   return (
-    <>
-      <section aria-labelledby="properties-heading" className="space-y-2">
-        <SectionHeading id="properties-heading">{heading}</SectionHeading>
-        {refs.length === 0 && <GridSettings />}
-        {single && <SingleItem key={single.item.id} item={single.item} layer={single.layer} />}
-        {refs.length > 1 && (
-          <div className="space-y-3">
-            <p className="text-sm">{refs.length} items selected</p>
-            <ItemActions ids={refs.map((ref) => ref.item.id)} items={refs.map((ref) => ref.item)} />
-          </div>
-        )}
+    <div className="space-y-2">
+      {single && <SingleItem key={single.item.id} item={single.item} layer={single.layer} />}
+      {refs.length > 1 && (
+        <div className="space-y-3">
+          <p className="text-sm">{refs.length} items selected</p>
+          <ItemActions ids={refs.map((ref) => ref.item.id)} items={refs.map((ref) => ref.item)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The active scene's settings: its grid and its fog of war. */
+export function ScenePanel() {
+  return (
+    <div className="space-y-4">
+      <section aria-labelledby="grid-heading" className="space-y-2">
+        <SubsectionHeading id="grid-heading">Grid</SubsectionHeading>
+        <GridSettings />
       </section>
-      {refs.length === 0 && <FogSettings />}
-    </>
+      <hr className="border-border" />
+      <FogSettings />
+    </div>
   )
 }

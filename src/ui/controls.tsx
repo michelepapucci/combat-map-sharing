@@ -286,3 +286,12 @@ export function SectionHeading({ id, children }: { id: string; children: ReactNo
     </h2>
   )
 }
+
+/** A heading inside a panel (the panel's own title is an h2). */
+export function SubsectionHeading({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <h3 id={id} className="text-xs font-semibold tracking-wider text-fg-muted uppercase">
+      {children}
+    </h3>
+  )
+}

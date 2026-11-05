@@ -5,7 +5,7 @@ import { useCampaign } from '../store/campaign'
 import { setLockedCellPx, useDevicePrefs } from '../store/devicePrefs'
 import { useSessionStore } from '../store/session'
 import { useUiStore } from '../store/ui'
-import { buttonClass, CommitNumberInput, Field, inputClass, SectionHeading } from '../ui/controls'
+import { buttonClass, CommitNumberInput, Field, inputClass } from '../ui/controls'
 
 const MODES: readonly { mode: PlayerCameraMode; label: string; hint: string }[] = [
   {
@@ -23,9 +23,29 @@ const MODES: readonly { mode: PlayerCameraMode; label: string; hint: string }[] 
 
 const DEFAULT_LOCKED_CELL_PX = 70
 
+/** The panel header's connection status: how many player windows are open. */
+export function PlayerViewStatus() {
+  const players = useSessionStore((s) => s.players)
+  return (
+    <span
+      role="status"
+      className={`flex min-w-0 items-center gap-1.5 text-xs font-normal whitespace-nowrap normal-case ${players > 0 ? 'text-ok' : 'text-fg-muted'}`}
+    >
+      <span
+        aria-hidden
+        className={`size-2 shrink-0 rounded-full ${players > 0 ? 'bg-ok' : 'border border-fg-muted'}`}
+      />
+      {players === 0
+        ? 'No player window'
+        : players === 1
+          ? '1 window connected'
+          : `${players} windows connected`}
+    </span>
+  )
+}
+
 /** Presentation controls (SPEC §5.9): camera mode, pushed view, blackout, scale lock. */
 export function PlayerViewPanel() {
-  const players = useSessionStore((s) => s.players)
   const mode = useCampaign((c) => c.presentation.cameraMode)
   const blackout = useCampaign((c) => c.presentation.blackout)
   const splash = useCampaign((c) => c.presentation.splashAssetId)
@@ -34,25 +54,7 @@ export function PlayerViewPanel() {
   const preview = useUiStore((s) => s.previewAsPlayers)
 
   return (
-    <section aria-labelledby="player-view-heading" className="space-y-3">
-      <div className="flex items-center gap-2">
-        <SectionHeading id="player-view-heading">Player view</SectionHeading>
-        <span
-          role="status"
-          className={`ml-auto flex items-center gap-1.5 text-xs ${players > 0 ? 'text-ok' : 'text-fg-muted'}`}
-        >
-          <span
-            aria-hidden
-            className={`size-2 rounded-full ${players > 0 ? 'bg-ok' : 'border border-fg-muted'}`}
-          />
-          {players === 0
-            ? 'No player window'
-            : players === 1
-              ? '1 window connected'
-              : `${players} windows connected`}
-        </span>
-      </div>
-
+    <div className="space-y-3">
       <fieldset className="space-y-1.5">
         <legend className="mb-1 text-xs text-fg-muted">Camera</legend>
         {MODES.map((option) => (
@@ -148,6 +150,6 @@ export function PlayerViewPanel() {
           </Field>
         )}
       </div>
-    </section>
+    </div>
   )
 }

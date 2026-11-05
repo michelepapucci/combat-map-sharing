@@ -24,6 +24,7 @@ import { useActiveScene } from '../store/campaign'
 import { addTokensToInitiative, tokensNotInInitiative } from '../store/initiativeActions'
 import { useUiStore } from '../store/ui'
 import type { Icon } from '../ui/controls'
+import { revealPanel } from './layout/panelLayout'
 import { MOD } from './shortcuts'
 
 interface MenuEntry {
@@ -143,10 +144,12 @@ export function ContextMenu() {
           {
             label: 'Edit token',
             icon: Pencil,
-            run: () =>
+            run: () => {
+              revealPanel('properties')
               useUiStore.setState((s) => ({
                 propertiesFocusRequest: s.propertiesFocusRequest + 1,
-              })),
+              }))
+            },
           },
         ]
       : []),

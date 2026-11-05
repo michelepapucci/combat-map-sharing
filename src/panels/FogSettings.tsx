@@ -3,7 +3,7 @@ import { confirmAction } from '../dm/confirm'
 import { useActiveScene } from '../store/campaign'
 import { clearFogEdits, resetExplored, setSceneFog } from '../store/fogActions'
 import { setTool } from '../store/ui'
-import { buttonClass, SectionHeading, Toggle } from '../ui/controls'
+import { buttonClass, SubsectionHeading, Toggle } from '../ui/controls'
 
 async function askResetExplored(): Promise<void> {
   const confirmed = await confirmAction({
@@ -23,7 +23,7 @@ export function FogSettings() {
   const edits = fog.manual.length
   return (
     <section aria-labelledby="fog-heading" className="space-y-2">
-      <SectionHeading id="fog-heading">Fog of war</SectionHeading>
+      <SubsectionHeading id="fog-heading">Fog of war</SubsectionHeading>
       <Toggle
         checked={fog.enabled}
         onChange={(enabled) => setSceneFog({ enabled })}

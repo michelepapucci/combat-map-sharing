@@ -1,5 +1,4 @@
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Crosshair,
@@ -50,24 +49,6 @@ import {
  * The initiative tracker (SPEC §5.8): turn order of the active scene, turns and
  * rounds, what players see of it. Collapsible; open by default.
  */
-
-const OPEN_KEY = 'vtt:initiativeOpen'
-
-function readOpen(): boolean {
-  try {
-    return localStorage.getItem(OPEN_KEY) !== 'false'
-  } catch {
-    return true
-  }
-}
-
-function writeOpen(open: boolean): void {
-  try {
-    localStorage.setItem(OPEN_KEY, String(open))
-  } catch {
-    // A preference only: ignore blocked storage.
-  }
-}
 
 /** A short DM-side note under an entry: why players don't see it, its token's HP. */
 function entryNote(entry: InitiativeEntry, scene: Scene): string | null {
@@ -297,7 +278,6 @@ async function confirmEnd(): Promise<void> {
 export function InitiativePanel() {
   const scene = useActiveScene()
   const selection = useUiStore((s) => s.selection)
-  const [open, setOpen] = useState(readOpen)
   const [drag, setDrag] = useState<TieDrag | null>(null)
   const tracker = scene.initiative
   const sorted = useMemo(() => sortInitiative(tracker.entries), [tracker.entries])
@@ -305,114 +285,94 @@ export function InitiativePanel() {
   const addable = tokensNotInInitiative(scene, selection).length
   const rollable = selectedTokens.filter((token) => token.kind !== 'player').length
   const started = tracker.activeEntryId !== null
-  const toggleOpen = () => {
-    setOpen(!open)
-    writeOpen(!open)
-  }
 
   return (
-    <section aria-labelledby="initiative-heading" className="space-y-2">
-      <div className="flex items-center gap-2">
-        <h2 id="initiative-heading" className="flex-1">
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls="initiative-body"
-            onClick={toggleOpen}
-            className="flex items-center gap-1 text-xs font-semibold tracking-wider text-fg-muted uppercase hover:text-fg"
-          >
-            <ChevronDown
-              aria-hidden
-              className={`size-3.5 transition-transform ${open ? '' : '-rotate-90'}`}
-            />
-            Initiative
-          </button>
-        </h2>
-        {tracker.entries.length > 0 && (
-          <span className="text-xs text-fg-muted">Round {tracker.round}</span>
-        )}
+    <div className="space-y-2">
+      <Toggle
+        checked={tracker.visibleToPlayers}
+        onChange={setTrackerVisible}
+        label="Show tracker to players"
+      />
+      <div className="flex items-center gap-1">
+        <IconButton
+          icon={ChevronLeft}
+          label="Previous turn"
+          title="Previous turn (Shift+N)"
+          disabled={!started}
+          onClick={() => previousTurn()}
+        />
+        <button
+          type="button"
+          onClick={() => nextTurn()}
+          disabled={tracker.entries.length === 0}
+          title="Next turn (N)"
+          className={`${buttonClass} flex-1`}
+        >
+          {started ? 'Next turn' : 'Start combat'}
+          <ChevronRight aria-hidden className="size-4" />
+        </button>
+        <IconButton
+          icon={Crosshair}
+          label="Center on active"
+          title="Center the view on the active creature"
+          disabled={activeToken(scene) === null}
+          onClick={() => centerOnActiveToken()}
+        />
       </div>
-      {open && (
-        <div id="initiative-body" className="space-y-2">
-          <Toggle
-            checked={tracker.visibleToPlayers}
-            onChange={setTrackerVisible}
-            label="Show tracker to players"
-          />
-          <div className="flex items-center gap-1">
-            <IconButton
-              icon={ChevronLeft}
-              label="Previous turn"
-              title="Previous turn (Shift+N)"
-              disabled={!started}
-              onClick={() => previousTurn()}
+      {sorted.length > 0 ? (
+        <ol aria-label="Turn order" className="space-y-0.5">
+          {sorted.map((entry) => (
+            <EntryRow
+              key={entry.id}
+              entry={entry}
+              scene={scene}
+              active={entry.id === tracker.activeEntryId}
+              drag={drag}
+              onDrag={setDrag}
             />
-            <button
-              type="button"
-              onClick={() => nextTurn()}
-              disabled={tracker.entries.length === 0}
-              title="Next turn (N)"
-              className={`${buttonClass} flex-1`}
-            >
-              {started ? 'Next turn' : 'Start combat'}
-              <ChevronRight aria-hidden className="size-4" />
-            </button>
-            <IconButton
-              icon={Crosshair}
-              label="Center on active"
-              title="Center the view on the active creature"
-              disabled={activeToken(scene) === null}
-              onClick={() => centerOnActiveToken()}
-            />
-          </div>
-          {sorted.length > 0 ? (
-            <ol aria-label="Turn order" className="space-y-0.5">
-              {sorted.map((entry) => (
-                <EntryRow
-                  key={entry.id}
-                  entry={entry}
-                  scene={scene}
-                  active={entry.id === tracker.activeEntryId}
-                  drag={drag}
-                  onDrag={setDrag}
-                />
-              ))}
-            </ol>
-          ) : (
-            <p className="text-xs text-fg-muted">
-              Select tokens and add them, or add creatures by name. Values sort the order; players
-              see names only.
-            </p>
-          )}
-          <AddByName />
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              className={buttonClass}
-              disabled={addable === 0}
-              onClick={() => addTokensToInitiative(selection)}
-            >
-              <Swords aria-hidden className="size-4" />
-              Add selected{addable > 0 ? ` (${addable})` : ''}
-            </button>
-            <button
-              type="button"
-              className={buttonClass}
-              disabled={rollable === 0}
-              title="d20 + initiative modifier for the selected NPCs and enemies"
-              onClick={() => rollInitiative(selection)}
-            >
-              <Dices aria-hidden className="size-4" />
-              Roll for selected
-            </button>
-          </div>
-          {tracker.entries.length > 0 && (
-            <button type="button" className={dangerButtonClass} onClick={() => void confirmEnd()}>
-              End combat…
-            </button>
-          )}
-        </div>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-xs text-fg-muted">
+          Select tokens and add them, or add creatures by name. Values sort the order; players see
+          names only.
+        </p>
       )}
-    </section>
+      <AddByName />
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={addable === 0}
+          onClick={() => addTokensToInitiative(selection)}
+        >
+          <Swords aria-hidden className="size-4" />
+          Add selected{addable > 0 ? ` (${addable})` : ''}
+        </button>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={rollable === 0}
+          title="d20 + initiative modifier for the selected NPCs and enemies"
+          onClick={() => rollInitiative(selection)}
+        >
+          <Dices aria-hidden className="size-4" />
+          Roll for selected
+        </button>
+      </div>
+      {tracker.entries.length > 0 && (
+        <button type="button" className={dangerButtonClass} onClick={() => void confirmEnd()}>
+          End combat…
+        </button>
+      )}
+    </div>
   )
+}
+
+/** The panel header's round counter, once there are entries. */
+export function InitiativeRound() {
+  const scene = useActiveScene()
+  const { entries, round } = scene.initiative
+  if (entries.length === 0) return null
+  return <span className="text-xs font-normal text-fg-muted normal-case">Round {round}</span>
 }

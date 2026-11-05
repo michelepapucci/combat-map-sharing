@@ -123,7 +123,8 @@ src/
   dm/           DM window: layout, toolbar, shortcuts, context menu, cheat sheet, library placement (M2); canvas/ = stage, gestures, overlay, HUD (M2);
                 session.ts (lock, load, autosave, campaigns), uploads.ts, thumbnails.ts, scene bar, campaigns/settings dialogs, confirm, save indicator (M3);
                 presentation.ts (player sync wiring) (M4); explored.ts (explored memory), fogTool.ts, canvas/FogViews.tsx (DM tint, preview) (M5);
-                canvas/playersView.ts (the projection for the preview) (M6)
+                canvas/playersView.ts (the projection for the preview) (M6);
+                layout/ = the side panels as cards: registry, docking and floating, drags, saved layout (M6)
   player/       player window: PlayerApp, openPlayerWindow (M1); PlayerCanvas (M4)
   state/        pure data: types.ts, ids.ts, defaults.ts, migrations.ts, fixtures/ (M1); validate.ts (M3)
   store/        Zustand stores, actions, undo history: DM only (M2); sceneActions, libraryActions, session status (M3); fogActions (M5); initiativeActions (M6)
@@ -156,7 +157,7 @@ docs/SPEC.md    the product spec
 - Styling: Tailwind v4, configured in CSS (`src/styles/index.css`; there is no `tailwind.config.js`). Use the semantic tokens `bg-bg`, `bg-surface`, `bg-surface-2`, `bg-surface-3`, `border-border`, `text-fg`, `text-fg-muted`, `text-accent`, `bg-accent`/`text-accent-fg`, `text-danger`, `text-ok`, `outline-focus`; no raw palette colors in the DM UI. Keep text at WCAG AA contrast (4.5:1). The player window is always black (`html[data-view='player']`).
 - Icons: `lucide-react`. Icon-only buttons have `aria-label` and a `title` that includes the shortcut. Hidden and locked states use icons as well as color.
 - Network: none at runtime except the GitHub API and gist raw URLs. The production CSP (`vite.config.ts`) enforces it; see Decision 6 for the full policy. When a feature needs another source (for example an image from another origin), change the CSP and its e2e test deliberately.
-- Device preferences (theme, player zoom lock `vtt:lockedCellPx`, later the remembered PAT) never go in `CampaignState`, so they don't travel with gists or backups. localStorage keys use the `vtt:` prefix.
+- Device preferences (theme, player zoom lock `vtt:lockedCellPx`, the side panels' layout `vtt:panels`, later the remembered PAT) never go in `CampaignState`, so they don't travel with gists or backups. localStorage keys use the `vtt:` prefix.
 - Tests are colocated as `*.test.ts(x)`; they run in Node by default. Add `jsdom` and `// @vitest-environment jsdom` only for files that need a DOM. Use `toStrictEqual` for data (it catches `undefined` keys).
 - Commit at the end of each milestone, on that milestone's branch.
 
@@ -330,3 +331,15 @@ Choices where the spec was ambiguous, incomplete or in conflict with a technical
 92. **The active ring** is gold, steady plus a growing and fading pulse every 1.4 s (steady only with reduced motion), around the active token. The DM sees it always, even on a hidden token; players only when `PlayerToken.active` is true. The pulse redraws at about 30 fps, and only the ring's layer: the DM overlay, or in the player window a small layer of its own between the tokens and the fog (mounted only while a ring is shown).
 93. **"Center on active"** moves the DM camera to the active token and keeps the zoom. It is refused, with a notice, while a player window follows the DM camera and that token is not sent to players (hidden or in the dark), because the TV would pan onto it. `CommitNumberInput` can show an empty value and report clearing it (`onClear`), for optional numbers such as the dex tiebreak and the modifier.
 94. **Fogged creatures in the tracker.** `'auto'` follows the token's hidden flag, not the fog (Decision 16). An enemy standing in the dark therefore appears in the players' tracker by name once it is added, but without its HP bar or its ring. For an ambush, hide the token (H) or its entry (the eye) until it is revealed.
+95. **The DM's side panels are cards that can float.** Player view, Initiative, Library, Layers, Properties and Scene (`src/dm/layout/`, registry in `registry.ts`).
+    - **Cards:** each has a header with an icon, the title, an optional status (connected windows, round), a collapse button and a pop-out / dock button. The sidebar shows them as separate cards on the page background.
+    - **Scene panel:** "Scene" holds the grid and fog settings, which Properties used to show only with nothing selected (refines Decision 42). Properties now shows only the selection, so the fog switch is always one glance away.
+    - **Popping out:** "Pop out" floats a panel just left of where it was docked. Dragging a docked panel's header pulls it out under the pointer.
+    - **Floating panels:**
+      - They move by their header, or with the arrow keys on their Move button (Shift: bigger steps), and resize from the bottom-right corner.
+      - A press brings one to the front. Stacking is renumbered 1..n, so it stays below menus and dialogs.
+      - They are kept reachable when the window shrinks.
+    - **Docking back:** "Dock" returns a panel to its place in the sidebar order. With nothing docked the sidebar disappears and the map takes its width.
+    - **Saved layout:** docked or floating, position, size and collapsed state are a device preference (`vtt:panels` in localStorage, read defensively), never campaign data, so they never travel with gists or backups.
+    - **"Edit token"** expands Properties and brings it to the front.
+    - **Implementation:** drags use window pointer listeners, so a panel can remount from the sidebar into the floating layer mid-drag. Collapsing hides a panel's content and keeps its state; floating ↔ docked remounts it.

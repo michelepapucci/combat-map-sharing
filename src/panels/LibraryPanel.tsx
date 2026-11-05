@@ -21,7 +21,7 @@ import { autoBadge } from '../state/naming'
 import { FOOTPRINT_CELLS, type AssetKind, type AssetMeta } from '../state/types'
 import { useCampaign } from '../store/campaign'
 import { useUiStore } from '../store/ui'
-import { buttonClass, inputClass, SectionHeading } from '../ui/controls'
+import { buttonClass, inputClass } from '../ui/controls'
 
 const TABS = [
   { id: 'tokens', label: 'Tokens', kind: 'token' },
@@ -348,9 +348,8 @@ export function LibraryPanel() {
 
   return (
     // The whole panel accepts dropped image files; the Upload button does the same from the keyboard.
-    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- file drop target only
-    <section
-      aria-labelledby="library-heading"
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- file drop target only
+    <div
       className={`space-y-2 rounded-lg ${dropping ? 'outline-2 outline-offset-4 outline-accent outline-dashed' : ''}`}
       onDragOver={(event) => {
         if (!hasFiles(event)) return
@@ -368,7 +367,6 @@ export function LibraryPanel() {
         upload(event.dataTransfer.files)
       }}
     >
-      <SectionHeading id="library-heading">Library</SectionHeading>
       <div
         role="tablist"
         aria-label="Asset types"
@@ -433,6 +431,6 @@ export function LibraryPanel() {
         <TabContent tab={tab} query={query} />
       </div>
       <p className="text-xs text-fg-muted">{PLACE_HINT}</p>
-    </section>
+    </div>
   )
 }

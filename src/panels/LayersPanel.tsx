@@ -2,7 +2,7 @@ import { Eye, EyeOff, Lock, LockOpen } from 'lucide-react'
 import type { LayerName } from '../state/types'
 import { setLayerState } from '../store/actions'
 import { useActiveScene } from '../store/campaign'
-import { IconButton, SectionHeading } from '../ui/controls'
+import { IconButton } from '../ui/controls'
 
 /** Top of the list = top of the stack. */
 const ROWS: readonly { layer: LayerName; label: string }[] = [
@@ -15,8 +15,7 @@ const ROWS: readonly { layer: LayerName; label: string }[] = [
 export function LayersPanel() {
   const scene = useActiveScene()
   return (
-    <section aria-labelledby="layers-heading" className="space-y-1.5">
-      <SectionHeading id="layers-heading">Layers</SectionHeading>
+    <div className="space-y-1.5">
       <ul className="space-y-0.5">
         {ROWS.map(({ layer, label }) => {
           const state = scene.layerState[layer]
@@ -55,6 +54,6 @@ export function LayersPanel() {
           )
         })}
       </ul>
-    </section>
+    </div>
   )
 }
