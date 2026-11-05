@@ -123,6 +123,55 @@ export const CommitTextInput = forwardRef<HTMLInputElement, CommitTextInputProps
   },
 )
 
+/** A multi-line text area committed on blur (Ctrl/⌘+Enter also commits); Escape reverts. */
+export function CommitTextarea({
+  value,
+  onCommit,
+  maxLength,
+  rows = 3,
+  placeholder,
+  'aria-label': ariaLabel,
+}: {
+  value: string
+  onCommit: (value: string) => void
+  maxLength?: number
+  rows?: number
+  placeholder?: string
+  'aria-label'?: string
+}) {
+  const [draft, setDraft] = useState(value)
+  const [lastValue, setLastValue] = useState(value)
+  const cancelled = useRef(false)
+  if (value !== lastValue) {
+    setLastValue(value)
+    setDraft(value)
+  }
+  return (
+    <textarea
+      value={draft}
+      rows={rows}
+      maxLength={maxLength}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (!cancelled.current && draft !== value) onCommit(draft)
+        cancelled.current = false
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) event.currentTarget.blur()
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          cancelled.current = true
+          setDraft(value)
+          event.currentTarget.blur()
+        }
+      }}
+      className={`${inputClass} resize-y`}
+    />
+  )
+}
+
 /** A number input committed on Enter or blur; invalid input reverts. */
 export function CommitNumberInput({
   value,

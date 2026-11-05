@@ -1,5 +1,17 @@
 import { create } from 'zustand'
-import type { Camera, Id, Item, LayerName, Ping, Token, Tool, UiState } from '../state/types'
+import type { Point } from '../geometry/types'
+import type {
+  Camera,
+  FogEditMode,
+  FogShape,
+  Id,
+  Item,
+  LayerName,
+  Ping,
+  Token,
+  Tool,
+  UiState,
+} from '../state/types'
 
 /** A copied item with the layer it came from. Plain deep copies, independent of the campaign. */
 export interface ClipboardEntry {
@@ -48,7 +60,20 @@ export interface DmUiState extends UiState {
   editingAssetId: Id | null
   /** Pings drawn in the DM window (they are also sent to players). */
   pings: Ping[]
+  /** Fog tool options. */
+  fogMode: FogEditMode
+  fogShape: FogShape['type']
+  /** Brush radius in squares. */
+  fogBrushCells: number
+  /** The fog shape being drawn (shown in the overlay); null when idle. */
+  fogDraft: FogDraft | null
 }
+
+/** A manual fog shape in progress, in world px. `cursor` is the live end of a polygon. */
+export type FogDraft =
+  | { type: 'rect'; from: Point; to: Point }
+  | { type: 'brush'; points: Point[]; radius: number }
+  | { type: 'polygon'; points: Point[]; cursor: Point | null }
 
 /** Modal UI that takes the keyboard: canvas shortcuts are off while one is open. */
 export function isModalOpen(ui: DmUiState): boolean {
@@ -81,13 +106,19 @@ export function initialUiState(): DmUiState {
     dialog: null,
     editingAssetId: null,
     pings: [],
+    fogMode: 'reveal',
+    fogShape: 'rect',
+    fogBrushCells: 1,
+    fogDraft: null,
   }
 }
 
 export const useUiStore = create<DmUiState>()(() => initialUiState())
 
 export function setTool(tool: Tool): void {
-  useUiStore.setState({ tool, contextMenu: null })
+  // A half-drawn fog shape belongs to the fog tool (pressing F again keeps it).
+  const same = useUiStore.getState().tool === tool
+  useUiStore.setState(same ? { contextMenu: null } : { tool, contextMenu: null, fogDraft: null })
 }
 
 export function setSelection(selection: Id[]): void {
@@ -130,17 +161,30 @@ export function sceneSwitched(from: Id, to: Id): void {
     pasteCount: 0,
     measurement: null,
     tempTemplate: null,
+    fogDraft: null,
     tool: ui.tool === 'calibrate' ? 'select' : ui.tool,
   })
 }
 
 /** Fresh UI for a newly loaded campaign; per-device choices and the canvas size survive. */
 export function resetUiForCampaign(): void {
-  const { tokenColor, calibrationCells, dmViewport, notice, importProgress } = useUiStore.getState()
+  const {
+    tokenColor,
+    calibrationCells,
+    dmViewport,
+    notice,
+    importProgress,
+    fogMode,
+    fogShape,
+    fogBrushCells,
+  } = useUiStore.getState()
   useUiStore.setState({
     ...initialUiState(),
     tokenColor,
     calibrationCells,
+    fogMode,
+    fogShape,
+    fogBrushCells,
     dmViewport,
     notice,
     importProgress,

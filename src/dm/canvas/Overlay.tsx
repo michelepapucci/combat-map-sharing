@@ -6,15 +6,16 @@ import { PingRipple } from '../../canvas/PingRipple'
 import { TokenShape } from '../../canvas/TokenShape'
 import { screenToWorld, worldToScreen } from '../../geometry/camera'
 import { worldDistanceFeet } from '../../geometry/distance'
+import { visionRadiusPx, visionSources } from '../../geometry/fog'
 import { formatLength } from '../../geometry/units'
-import { itemBounds } from '../../geometry/rect'
+import { itemBounds, rectFromPoints } from '../../geometry/rect'
 import { isRightAngle, snapToLine } from '../../geometry/snap'
 import type { Rect as RectShape } from '../../geometry/types'
 import { allItems, findItem, isItemMovable } from '../../state/sceneOps'
-import type { Id, Item, Scene, Token } from '../../state/types'
+import type { FogEditMode, Id, Item, Scene, Token } from '../../state/types'
 import { transformItems, type ItemGeometry } from '../../store/actions'
 import { useActiveScene, useCampaign } from '../../store/campaign'
-import { useUiStore } from '../../store/ui'
+import { useUiStore, type FogDraft } from '../../store/ui'
 import { useCssColor } from './useCssColor'
 
 const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"
@@ -169,6 +170,67 @@ function DragTrail({
   )
 }
 
+/**
+ * The vision radius of a selected token, as a dashed ring (shown with fog on or
+ * off, following a drag: where it will see after the drop). Dotted and dimmer
+ * when the token reveals no fog for players (an enemy, a hidden token...).
+ */
+function VisionRing({
+  token,
+  at,
+  scene,
+  reveals,
+  showLabel,
+  zoom,
+  color,
+}: {
+  token: Token
+  at: { x: number; y: number }
+  scene: Scene
+  reveals: boolean
+  showLabel: boolean
+  zoom: number
+  color: string
+}) {
+  const units = useCampaign((c) => c.settings.units)
+  if (token.visionFt === null) return null
+  const r = visionRadiusPx(token.visionFt, scene.grid)
+  if (!(r > 0) || !Number.isFinite(r)) return null
+  return (
+    <Group listening={false} opacity={reveals ? 0.9 : 0.55}>
+      <Circle
+        x={at.x}
+        y={at.y}
+        radius={r}
+        stroke={color}
+        strokeWidth={1.5}
+        dash={reveals ? [10, 6] : [2, 6]}
+        lineCap="round"
+        strokeScaleEnabled={false}
+        perfectDrawEnabled={false}
+      />
+      {showLabel && (
+        <Label x={at.x} y={at.y - r - 4 / zoom} scaleX={1 / zoom} scaleY={1 / zoom}>
+          <Tag
+            fill="rgba(12, 14, 18, 0.88)"
+            cornerRadius={4}
+            pointerDirection="down"
+            pointerWidth={8}
+            pointerHeight={5}
+          />
+          <Text
+            text={`Vision ${formatLength(token.visionFt, units)}${reveals ? '' : ' (reveals no fog)'}`}
+            fontFamily={FONT}
+            fontSize={12}
+            fill="#ffffff"
+            padding={4}
+          />
+        </Label>
+      )}
+    </Group>
+  )
+}
+
 function CalibrationBox({
   box,
   cells,
@@ -206,7 +268,13 @@ function CalibrationBox({
         />
       ))}
       <Label x={box.x} y={box.y - 28 / zoom} scaleX={1 / zoom} scaleY={1 / zoom}>
-        <Tag fill="rgba(12, 14, 18, 0.88)" cornerRadius={4} />
+        <Tag
+          fill="rgba(12, 14, 18, 0.88)"
+          cornerRadius={4}
+          pointerDirection="down"
+          pointerWidth={8}
+          pointerHeight={5}
+        />
         <Text
           text={`${cells} × ${cells} ${cells === 1 ? 'cell' : 'cells'}`}
           fontFamily={FONT}
@@ -219,10 +287,64 @@ function CalibrationBox({
   )
 }
 
+/** The manual fog shape being drawn: light for reveal, dark for hide. */
+function FogDraftPreview({
+  draft,
+  mode,
+  zoom,
+  accent,
+}: {
+  draft: FogDraft
+  mode: FogEditMode
+  zoom: number
+  accent: string
+}) {
+  const fill = mode === 'reveal' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.45)'
+  const outline = { stroke: accent, strokeWidth: 1.5 / zoom, dash: [6 / zoom, 4 / zoom] }
+  if (draft.type === 'rect') {
+    return (
+      <Rect {...rectFromPoints(draft.from, draft.to)} fill={fill} {...outline} listening={false} />
+    )
+  }
+  if (draft.type === 'brush') {
+    const points = draft.points.flatMap((p) => [p.x, p.y])
+    const first = draft.points[0]
+    return draft.points.length === 1 && first ? (
+      <Circle x={first.x} y={first.y} radius={draft.radius} fill={fill} listening={false} />
+    ) : (
+      <Line
+        points={points}
+        stroke={fill}
+        strokeWidth={draft.radius * 2}
+        lineCap="round"
+        lineJoin="round"
+        listening={false}
+      />
+    )
+  }
+  const corners = draft.cursor ? [...draft.points, draft.cursor] : draft.points
+  const first = draft.points[0]
+  return (
+    <Group listening={false}>
+      <Line points={corners.flatMap((p) => [p.x, p.y])} closed fill={fill} {...outline} />
+      {first && (
+        <Circle
+          x={first.x}
+          y={first.y}
+          radius={6 / zoom}
+          fill={accent}
+          stroke="#000"
+          strokeWidth={1 / zoom}
+        />
+      )}
+    </Group>
+  )
+}
+
 /**
  * Everything drawn above the scene in the DM window: hover and selection outlines,
- * the Transformer, hidden/locked badges, drag trails, the marquee and the
- * calibration box.
+ * the Transformer, hidden/locked badges, drag trails, the marquee, the
+ * calibration box and the fog shape being drawn.
  */
 export function Overlay({ marquee, calibration }: OverlayProps) {
   const scene = useActiveScene()
@@ -234,7 +356,10 @@ export function Overlay({ marquee, calibration }: OverlayProps) {
   const tool = useUiStore((s) => s.tool)
   const calibrationCells = useUiStore((s) => s.calibrationCells)
   const pings = useUiStore((s) => s.pings)
+  const fogDraft = useUiStore((s) => s.fogDraft)
+  const fogMode = useUiStore((s) => s.fogMode)
   const snapEnabled = useCampaign((c) => c.settings.snapEnabled)
+  const npcVision = useCampaign((c) => c.settings.npcVision)
   const accent = useCssColor('--accent', '#e3a83b')
   const transformerRef = useRef<Konva.Transformer>(null)
 
@@ -310,6 +435,11 @@ export function Overlay({ marquee, calibration }: OverlayProps) {
     transformItems(changes)
   }
 
+  const sources = new Set(visionSources(scene, { npcVision }).map((source) => source.tokenId))
+  const sighted = selected.flatMap((ref) =>
+    ref.layer === 'tokens' && (ref.item as Token).visionFt !== null ? [ref.item as Token] : [],
+  )
+
   const dragged = liveDrag
     ? Object.entries(liveDrag).flatMap(([id, to]) => {
         const ref = findItem(scene, id)
@@ -319,6 +449,18 @@ export function Overlay({ marquee, calibration }: OverlayProps) {
 
   return (
     <>
+      {sighted.map((token) => (
+        <VisionRing
+          key={token.id}
+          token={token}
+          at={liveDrag?.[token.id] ?? token}
+          scene={scene}
+          reveals={sources.has(token.id)}
+          showLabel={sighted.length === 1}
+          zoom={zoom}
+          color={accent}
+        />
+      ))}
       {hovered && scene.layerState[hovered.layer].visible && (
         <Outline item={livePosition(hovered.item, liveDrag)} color={accent} dashed={false} />
       )}
@@ -380,6 +522,7 @@ export function Overlay({ marquee, calibration }: OverlayProps) {
       {calibration && (
         <CalibrationBox box={calibration} cells={calibrationCells} color={accent} zoom={zoom} />
       )}
+      {fogDraft && <FogDraftPreview draft={fogDraft} mode={fogMode} zoom={zoom} accent={accent} />}
       {pings.map((ping) => (
         <PingRipple key={ping.id} x={ping.x} y={ping.y} startedAt={ping.createdAt} scale={zoom} />
       ))}

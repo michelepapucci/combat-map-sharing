@@ -18,7 +18,13 @@ const TOOL_BUTTONS: readonly ToolButton[] = [
   { tool: 'select', label: 'Select', shortcut: 'V', Icon: MousePointer2, comingIn: null },
   { tool: 'measure', label: 'Measure', shortcut: 'M', Icon: Ruler, comingIn: 7 },
   { tool: 'aoe', label: 'Area of effect', shortcut: 'A', Icon: CircleDashed, comingIn: 7 },
-  { tool: 'fog', label: 'Fog', shortcut: 'F', Icon: CloudFog, comingIn: 5 },
+  {
+    tool: 'fog',
+    label: 'Fog: reveal or hide by hand',
+    shortcut: 'F',
+    Icon: CloudFog,
+    comingIn: null,
+  },
   { tool: 'ping', label: 'Ping (or Alt+click)', shortcut: 'P', Icon: Radar, comingIn: null },
   {
     tool: 'calibrate',

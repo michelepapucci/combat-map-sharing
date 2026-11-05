@@ -8,7 +8,7 @@ import type { Point, Rect } from '../geometry/types'
 import { createItem, createToken } from '../state/defaults'
 import { newId } from '../state/ids'
 import { autoBadge, nextNumberedName } from '../state/naming'
-import { MAX_NAME_LENGTH } from '../state/validate'
+import { MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH } from '../state/validate'
 import {
   allItems,
   findItem,
@@ -143,6 +143,8 @@ function placeTokenFrom(spec: TokenSpec, at: Point, { snap }: PlaceOptions): Id 
     y: center.y,
     gridSize: scene.grid.size,
   })
+  // Heroes see from the start (fog would otherwise stay black around them).
+  if (spec.kind === 'player') token.visionFt = DEFAULT_PLAYER_VISION_FT
   commit(`Place ${name}`, (draft) => {
     sceneOf(draft).layers.tokens.push(token)
   })
@@ -426,7 +428,52 @@ export function reorderItems(ids: readonly Id[], direction: 'forward' | 'backwar
 
 export type ItemPatch = Partial<Pick<Item, 'name' | 'opacity' | 'rotation' | 'hidden' | 'locked'>>
 export type TokenPatch = ItemPatch &
-  Partial<Pick<Token, 'color' | 'badge' | 'sizeCategory' | 'kind'>>
+  Partial<
+    Pick<
+      Token,
+      | 'color'
+      | 'badge'
+      | 'sizeCategory'
+      | 'kind'
+      | 'label'
+      | 'showLabel'
+      | 'visionFt'
+      | 'hp'
+      | 'conditions'
+      | 'dmNotes'
+      | 'initiativeModifier'
+    >
+  >
+
+/** Longest vision radius accepted (feet): beyond any 5e sense, small enough to rasterize. */
+export const MAX_VISION_FT = 1000
+/** Vision of a new player token, or of a token that becomes one without vision (darkvision, 18 m). */
+export const DEFAULT_PLAYER_VISION_FT = 60
+export const MAX_CONDITIONS = 20
+
+/** Whole hit points: max from 1 to 9999, current from -max (massive damage) to max. */
+function cleanHp(hp: Token['hp']): Token['hp'] {
+  if (hp === null) return null
+  const max = Math.min(9999, Math.max(1, Math.round(Number.isFinite(hp.max) ? hp.max : 1)))
+  const current = Math.min(
+    max,
+    Math.max(-max, Math.round(Number.isFinite(hp.current) ? hp.current : max)),
+  )
+  return { current, max, publicBar: hp.publicBar }
+}
+
+/** Trimmed, unique (case-insensitive), at most MAX_CONDITIONS of at most 64 characters. */
+export function cleanConditions(conditions: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const raw of conditions) {
+    const condition = raw.trim().slice(0, MAX_TAG_LENGTH)
+    if (condition === '' || seen.has(condition.toLowerCase())) continue
+    seen.add(condition.toLowerCase())
+    result.push(condition)
+  }
+  return result.slice(0, MAX_CONDITIONS)
+}
 
 /**
  * Edits one item. A token rename also renames an automatic badge; a size change
@@ -457,7 +504,34 @@ export function updateItem(
         }
         if (patch.badge !== undefined) item.badge = patch.badge
         if (patch.color !== undefined) item.color = patch.color
-        if (patch.kind !== undefined) item.kind = patch.kind
+        if (patch.kind !== undefined) {
+          if (patch.kind === 'player' && item.kind !== 'player' && item.visionFt === null) {
+            item.visionFt = DEFAULT_PLAYER_VISION_FT
+          }
+          item.kind = patch.kind
+        }
+        if (patch.label !== undefined) {
+          const text = patch.label?.slice(0, MAX_NAME_LENGTH) ?? null
+          item.label = text === null || text.trim() === '' ? null : text
+        }
+        if (patch.showLabel !== undefined) item.showLabel = patch.showLabel
+        if (patch.visionFt !== undefined) {
+          const vision = patch.visionFt
+          item.visionFt =
+            vision === null || !Number.isFinite(vision) || vision <= 0
+              ? null
+              : Math.min(MAX_VISION_FT, vision)
+        }
+        if (patch.hp !== undefined) item.hp = cleanHp(patch.hp)
+        if (patch.conditions !== undefined) item.conditions = cleanConditions(patch.conditions)
+        if (patch.dmNotes !== undefined) item.dmNotes = patch.dmNotes.slice(0, MAX_NOTES_LENGTH)
+        if (patch.initiativeModifier !== undefined) {
+          const modifier = patch.initiativeModifier
+          item.initiativeModifier =
+            modifier === null || !Number.isFinite(modifier)
+              ? null
+              : Math.min(99, Math.max(-99, Math.round(modifier)))
+        }
         if (patch.sizeCategory !== undefined && patch.sizeCategory !== item.sizeCategory) {
           const span = FOOTPRINT_CELLS[patch.sizeCategory] * scene.grid.size
           item.x = item.x - item.width / 2 + span / 2

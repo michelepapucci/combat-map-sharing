@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { recordExplored, resetExploredTracking } from '../dm/explored'
 import { MAP_ASSETS, PROP_ASSETS, TOKEN_COLORS, TOKEN_PRESETS } from '../assets/builtin/registry'
 import { createCampaign } from '../state/defaults'
 import { migrateToCurrent } from '../state/migrations'
@@ -7,6 +8,7 @@ import {
   SIZE_CATEGORIES,
   TOKEN_KINDS,
   type AssetMeta,
+  type FogShape,
   type CampaignState,
   type Id,
 } from '../state/types'
@@ -33,7 +35,8 @@ import {
   updateGrid,
   updateItem,
 } from './actions'
-import { getCampaign, loadCampaign } from './campaign'
+import { getCampaign, loadCampaign, setUnrecorded, useCampaignStore } from './campaign'
+import { addFogEdit, clearFogEdits, resetExplored, setNpcVision, setSceneFog } from './fogActions'
 import { addAssets, removeAsset, updateAsset } from './libraryActions'
 import {
   addScene,
@@ -61,11 +64,15 @@ function mulberry32(seed: number): () => number {
   }
 }
 
+function tokenIds(): Id[] {
+  return currentScene().layers.tokens.map((token) => token.id)
+}
+
 function itemIds(): Id[] {
   return allItems(currentScene()).map(({ item }) => item.id)
 }
 
-function run(seed: number, steps: number): void {
+function run(seed: number, steps: number, focus: 'all' | 'fog'): void {
   const r = mulberry32(seed)
   const pick = <T>(values: readonly T[]): T => {
     const value = values[Math.floor(r() * values.length)]
@@ -73,14 +80,85 @@ function run(seed: number, steps: number): void {
     return value
   }
   const num = (min: number, max: number) => min + r() * (max - min)
-  const point = () => ({ x: num(-3000, 3000), y: num(-3000, 3000) })
+  // Mostly near the origin, sometimes absurdly far (fog chunk coordinates have limits).
+  const coordinate = () => (r() < 0.03 ? num(-1e9, 1e9) : num(-3000, 3000))
+  const point = () => ({ x: coordinate(), y: coordinate() })
   const longText = () => 'Ж😀x '.repeat(Math.floor(num(0, 90)))
   const name = () => (r() < 0.3 ? longText() : pick(['Goblin', 'Orc 7', '', '  Boss  ', 'A']))
   const someIds = (): Id[] => itemIds().filter(() => r() < 0.4)
   const uploads: AssetMeta[] = []
   let uploadCount = 0
 
-  const actions: (() => void)[] = [
+  // Token properties, vision and fog (milestone 5).
+  const fogActions: (() => void)[] = [
+    () => {
+      const id = placeToken(pick(['hero', 'ally', 'goblin']), point(), { snap: r() < 0.5 })
+      if (id) updateItem(id, { visionFt: pick([30, 60, 120]) })
+    },
+    () => {
+      const ids = tokenIds().filter(() => r() < 0.5)
+      moveItems(Object.fromEntries(ids.map((id) => [id, r() < 0.5 ? point() : { x: 0, y: 0 }])))
+    },
+    () => {
+      const ids = tokenIds()
+      if (ids.length === 0) return
+      updateItem(pick(ids), {
+        label: r() < 0.2 ? null : name(),
+        showLabel: r() < 0.5,
+        visionFt: pick([null, 0, 30, 60, num(-10, 5000), Number.NaN]),
+        hp: pick([
+          null,
+          { current: num(-1e5, 1e5), max: num(-10, 1e5), publicBar: r() < 0.5 },
+          { current: Number.NaN, max: Number.POSITIVE_INFINITY, publicBar: true },
+        ]),
+        conditions: Array.from({ length: Math.floor(num(0, 30)) }, () =>
+          pick(['prone', 'Prone', ' poisoned ', '', longText()]),
+        ),
+        dmNotes: r() < 0.1 ? 'x'.repeat(25000) : longText(),
+        initiativeModifier: pick([null, num(-500, 500), Number.NaN]),
+      })
+    },
+    () => {
+      const ids = tokenIds()
+      const id = ids.length > 0 ? pick(ids) : null
+      const hp = id ? currentScene().layers.tokens.find((t) => t.id === id)?.hp : null
+      if (id && hp) {
+        updateItem(
+          id,
+          { hp: { ...hp, current: hp.current + pick([-5, -1, 1, 5]) } },
+          {
+            coalesceKey: `hp:${id}`,
+          },
+        )
+      }
+    },
+    () => setSceneFog({ enabled: r() < 0.7, exploredEnabled: r() < 0.8 }),
+    () => {
+      const mode = pick(['reveal', 'hide'] as const)
+      const from = point()
+      const shape: FogShape = pick([
+        { type: 'rect', x: from.x, y: from.y, width: num(-50, 900), height: num(-50, 900) },
+        {
+          type: 'polygon',
+          points: Array.from({ length: Math.floor(num(0, 12)) }, () => coordinate()),
+        },
+        {
+          type: 'brush',
+          points: Array.from({ length: 2 * Math.floor(num(0, 8)) }, () => coordinate()),
+          radius: num(-5, 300),
+        },
+      ])
+      addFogEdit(mode, shape)
+    },
+    () => clearFogEdits(),
+    () => resetExplored(),
+    () => setNpcVision(r() < 0.5),
+    () =>
+      setUnrecorded((draft) => {
+        draft.presentation.blackout = r() < 0.3
+      }),
+  ]
+  const base: (() => void)[] = [
     () => placeToken(pick(TOKEN_PRESETS).id, point(), { snap: r() < 0.5 }),
     () => placeImage(pick(PROP_ASSETS).id, point(), { snap: r() < 0.5 }),
     () => placeImage(pick(MAP_ASSETS).id, point(), { snap: r() < 0.5, anchor: 'top-left' }),
@@ -181,23 +259,58 @@ function run(seed: number, steps: number): void {
     () => undoAction(),
     () => redoAction(),
   ]
+  const actions =
+    focus === 'fog'
+      ? [...base, ...Array.from({ length: 5 }, () => fogActions).flat()]
+      : [...base, ...fogActions]
+  if (focus === 'fog') setSceneFog({ enabled: true })
   for (let step = 0; step < steps; step++) pick(actions)()
+}
+
+function exploredChunks(): number {
+  return Object.values(getCampaign().sceneMemory).reduce(
+    (sum, memory) => sum + Object.keys(memory.explored.chunks).length,
+    0,
+  )
+}
+
+/** Runs a session and checks the round trip; returns the most explored chunks seen at once. */
+function session(seed: number, focus: 'all' | 'fog'): number {
+  resetExploredTracking()
+  loadCampaign(createCampaign('Fuzz'))
+  useUiStore.setState(initialUiState())
+  // Explored memory grows as in the DM session (presentation.ts).
+  let mostChunks = 0
+  const stop = useCampaignStore.subscribe((state, previous) => {
+    if (state.campaign === previous.campaign) return
+    recordExplored()
+    mostChunks = Math.max(mostChunks, exploredChunks())
+  })
+  try {
+    run(seed, 400, focus)
+  } finally {
+    stop()
+  }
+  const saved = JSON.parse(JSON.stringify(getCampaign())) as CampaignState
+  const { campaign, repairs } = validateCampaign(migrateToCurrent(saved))
+  // The only expected repair: memory of deleted scenes, kept for undo, is dropped (Decision 50).
+  const live = new Set(saved.scenes.map((scene) => scene.id))
+  const orphans = Object.keys(saved.sceneMemory).filter((id) => !live.has(id))
+  expect(repairs).toStrictEqual(
+    orphans.map((id) => `sceneMemory[${JSON.stringify(id)}]: dropped memory of a deleted scene`),
+  )
+  for (const id of orphans) delete saved.sceneMemory[id]
+  expect(campaign).toStrictEqual(saved)
+  return mostChunks
 }
 
 describe('the editor never saves a campaign it cannot load', () => {
   it.each([1, 2, 3, 4, 5, 6, 7, 8])('random session %i', (seed) => {
-    loadCampaign(createCampaign('Fuzz'))
-    useUiStore.setState(initialUiState())
-    run(seed, 400)
-    const saved = JSON.parse(JSON.stringify(getCampaign())) as CampaignState
-    const { campaign, repairs } = validateCampaign(migrateToCurrent(saved))
-    // The only expected repair: memory of deleted scenes, kept for undo, is dropped (Decision 50).
-    const live = new Set(saved.scenes.map((scene) => scene.id))
-    const orphans = Object.keys(saved.sceneMemory).filter((id) => !live.has(id))
-    expect(repairs).toStrictEqual(
-      orphans.map((id) => `sceneMemory[${JSON.stringify(id)}]: dropped memory of a deleted scene`),
-    )
-    for (const id of orphans) delete saved.sceneMemory[id]
-    expect(campaign).toStrictEqual(saved)
+    expect(session(seed, 'all')).toBeGreaterThanOrEqual(0)
+  })
+
+  it.each([11, 12, 13, 14, 15, 16])('random fog session %i', (seed) => {
+    // The session really recorded explored memory (the fuzz is not vacuous).
+    expect(session(seed, 'fog')).toBeGreaterThan(0)
   })
 })

@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { DIAGONAL_RULES, UNIT_SYSTEMS, type DiagonalRule, type UnitSystem } from '../state/types'
 import { setUnrecorded, useCampaign } from '../store/campaign'
 import { useSessionStore } from '../store/session'
+import { setNpcVision } from '../store/fogActions'
 import { useUiStore } from '../store/ui'
-import { buttonClass, Field, inputClass } from '../ui/controls'
+import { buttonClass, Field, inputClass, Toggle } from '../ui/controls'
 import { Dialog } from '../ui/Dialog'
 
 const DIAGONAL_LABELS: Record<DiagonalRule, string> = {
@@ -121,6 +122,7 @@ function StorageSection() {
 export function SettingsDialog() {
   const diagonalRule = useCampaign((c) => c.settings.diagonalRule)
   const units = useCampaign((c) => c.settings.units)
+  const npcVision = useCampaign((c) => c.settings.npcVision)
   return (
     <Dialog title="Settings" onClose={() => useUiStore.setState({ dialog: null })}>
       <div className="space-y-6">
@@ -150,6 +152,11 @@ export function SettingsDialog() {
             Distances, vision and templates are shown in these units. Rules are kept in feet and
             converted at 5 ft = 1.5 m, as in the metric editions of the rulebooks.
           </p>
+          <Toggle
+            checked={npcVision}
+            onChange={setNpcVision}
+            label="NPC allies with a vision radius reveal fog too"
+          />
           <Field label="Diagonal movement">
             <select
               value={diagonalRule}

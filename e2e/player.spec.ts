@@ -106,17 +106,18 @@ test('the player follows the DM camera in follow mode, and a pushed view otherwi
   const playerScale = () => player.evaluate(() => window.Konva?.stages[0]?.scaleX() ?? 0)
   await expect.poll(playerScale).toBeGreaterThan(0)
 
+  // The default view (pushed mode, nothing pushed yet), read before following:
+  // the follow view arrives asynchronously and frames a different area.
+  const pushed = await playerScale()
   await page.getByRole('radio', { name: 'Follow my view' }).check()
-  const before = await playerScale()
-  await page.getByRole('button', { name: 'Zoom in' }).click()
-  await page.getByRole('button', { name: 'Zoom in' }).click()
-  await expect.poll(playerScale).toBeGreaterThan(before * 1.3)
+  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Zoom in' }).click()
+  await expect.poll(playerScale).toBeGreaterThan(pushed * 1.3)
 
   // Back to pushed: the player keeps the last pushed view until the DM pushes again.
   await page.getByRole('radio', { name: 'Pushed view' }).check()
-  await expect.poll(playerScale).toBeCloseTo(before, 3)
+  await expect.poll(playerScale).toBeCloseTo(pushed, 3)
   await page.getByRole('button', { name: 'Push my view to players' }).click()
-  await expect.poll(playerScale).toBeGreaterThan(before * 1.3)
+  await expect.poll(playerScale).toBeGreaterThan(pushed * 1.3)
   expect(errors).toStrictEqual([])
 })
 

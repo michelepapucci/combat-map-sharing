@@ -1,9 +1,10 @@
-import { Eye, EyeOff, ScanEye } from 'lucide-react'
+import { Eye, EyeOff, MonitorPlay, ScanEye } from 'lucide-react'
 import { pushView, setBlackout, setCameraMode, setSplash } from '../dm/presentation'
 import type { PlayerCameraMode } from '../state/types'
 import { useCampaign } from '../store/campaign'
 import { setLockedCellPx, useDevicePrefs } from '../store/devicePrefs'
 import { useSessionStore } from '../store/session'
+import { useUiStore } from '../store/ui'
 import { buttonClass, CommitNumberInput, Field, inputClass, SectionHeading } from '../ui/controls'
 
 const MODES: readonly { mode: PlayerCameraMode; label: string; hint: string }[] = [
@@ -30,6 +31,7 @@ export function PlayerViewPanel() {
   const splash = useCampaign((c) => c.presentation.splashAssetId)
   const library = useCampaign((c) => c.library)
   const lockedCellPx = useDevicePrefs((s) => s.lockedCellPx)
+  const preview = useUiStore((s) => s.previewAsPlayers)
 
   return (
     <section aria-labelledby="player-view-heading" className="space-y-3">
@@ -78,6 +80,17 @@ export function PlayerViewPanel() {
       >
         <ScanEye aria-hidden className="size-4" />
         Push my view to players
+      </button>
+
+      <button
+        type="button"
+        aria-pressed={preview}
+        className={`${buttonClass} w-full`}
+        onClick={() => useUiStore.setState({ previewAsPlayers: !preview })}
+        title="Show in this window exactly what the players' screen shows (Esc to stop)"
+      >
+        <MonitorPlay aria-hidden className="size-4" />
+        {preview ? 'Stop preview' : 'Preview as players'}
       </button>
 
       <div className="space-y-2">

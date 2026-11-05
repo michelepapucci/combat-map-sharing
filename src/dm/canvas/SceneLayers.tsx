@@ -37,6 +37,10 @@ export const DmToken = memo(function DmToken({ token }: { token: Token }) {
       opacity={token.opacity * (token.hidden ? HIDDEN_FACTOR : 1)}
       color={token.color}
       badge={token.badge}
+      label={token.showLabel ? token.label : null}
+      hpFraction={token.hp ? token.hp.current / token.hp.max : null}
+      hpPrivate={token.hp !== null && !token.hp.publicBar}
+      conditions={token.conditions}
     />
   )
 })

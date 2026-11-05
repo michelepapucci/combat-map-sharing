@@ -10,6 +10,7 @@ import { useDevicePrefs } from '../store/devicePrefs'
 import { useSessionStore } from '../store/session'
 import { notify, useUiStore } from '../store/ui'
 import { createDmSync, type DmSync } from '../sync/dmSync'
+import { recordExplored, resetExploredTracking } from './explored'
 
 /**
  * What the players see (SPEC §5.9): the player sync of this DM tab, pings,
@@ -42,7 +43,11 @@ export function startPresentation(): void {
   window.addEventListener('pagehide', flush)
   const stops = [
     useCampaignStore.subscribe((state, previous) => {
-      if (state.campaign !== previous.campaign) invalidate()
+      if (state.campaign === previous.campaign) return
+      if (state.campaign?.id !== previous.campaign?.id) resetExploredTracking()
+      // Explored memory grows first, so the view sent next already includes it.
+      recordExplored()
+      invalidate()
     }),
     // Only the UI fields the projection reads (hover and selection changes are not sent).
     useUiStore.subscribe((state, previous) => {

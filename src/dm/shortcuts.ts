@@ -14,6 +14,7 @@ import {
 import { useCampaignStore } from '../store/campaign'
 import { isModalOpen, notify, setSelection, setTool, useUiStore } from '../store/ui'
 import { getPointerWorld } from './canvas/pointer'
+import { closeFogPolygon, removeLastFogCorner } from './fogTool'
 import { flushSave } from './session'
 
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -50,8 +51,12 @@ export const SHORTCUT_GROUPS: readonly {
         action: 'Ping: click to show players a point (Alt+click works with any tool)',
       },
       {
-        keys: ['M', 'A', 'F'],
-        action: 'Measure, area of effect, fog (later milestones)',
+        keys: ['F'],
+        action: 'Fog: drag a rectangle or brush, or click polygon corners (Enter closes)',
+      },
+      {
+        keys: ['M', 'A'],
+        action: 'Measure, area of effect (later milestones)',
       },
       { keys: ['?'], action: 'This cheat sheet' },
     ],
@@ -97,11 +102,18 @@ const ARROWS: Record<string, [number, number]> = {
 
 export function handleShortcut(event: KeyboardEvent): boolean {
   const ui = useUiStore.getState()
-  // No shortcuts while a drag is in flight: the drop commits positions computed at its start.
-  if (!useCampaignStore.getState().campaign || isModalOpen(ui) || ui.liveDrag) return false
+  // No shortcuts while a drag or a fog stroke is in flight: the drop commits
+  // what was computed from its start (Esc is handled by the canvas gesture).
+  const stroking = ui.fogDraft !== null && ui.fogDraft.type !== 'polygon'
+  if (!useCampaignStore.getState().campaign || isModalOpen(ui) || ui.liveDrag || stroking) {
+    return false
+  }
   const selection = ui.selection
   const mod = event.ctrlKey || event.metaKey
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
+  // "Preview as players" only looks: no editing shortcuts until it ends (Esc).
+  // Ctrl+S still saves rather than opening the browser's "Save page".
+  if (ui.previewAsPlayers && key !== 'Escape' && key !== '?' && !(mod && key === 's')) return false
 
   if (mod && !event.altKey) {
     switch (key) {
@@ -133,6 +145,14 @@ export function handleShortcut(event: KeyboardEvent): boolean {
         return false
     }
   }
+  // The fog polygon being drawn takes Enter (close) and Backspace (remove the
+  // last corner). With the Fog tool, Backspace/Delete never delete the selection:
+  // one press too many while removing corners must not delete a token.
+  if (ui.tool === 'fog' && !mod) {
+    const polygon = ui.fogDraft?.type === 'polygon'
+    if (key === 'Enter' && polygon) return closeFogPolygon() || true
+    if (key === 'Backspace' || key === 'Delete') return removeLastFogCorner() || true
+  }
   if (mod || event.altKey) return false
 
   const arrow = ARROWS[event.key]
@@ -160,11 +180,16 @@ export function handleShortcut(event: KeyboardEvent): boolean {
     case 'p':
       setTool('ping')
       return true
+    case 'f':
+      setTool('fog')
+      return true
     case '?':
       useUiStore.setState({ shortcutsOpen: true, contextMenu: null })
       return true
     case 'Escape':
-      if (ui.contextMenu) useUiStore.setState({ contextMenu: null })
+      if (ui.previewAsPlayers) useUiStore.setState({ previewAsPlayers: false })
+      else if (ui.contextMenu) useUiStore.setState({ contextMenu: null })
+      else if (ui.fogDraft) useUiStore.setState({ fogDraft: null })
       else if (ui.tool !== 'select') setTool('select')
       else if (selection.length > 0) setSelection([])
       else return false

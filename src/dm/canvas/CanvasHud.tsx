@@ -1,4 +1,4 @@
-import { LoaderCircle, Maximize, Minus, Plus, Upload, X } from 'lucide-react'
+import { LoaderCircle, Maximize, Minus, Plus, ScanEye, Upload, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { IMAGE_MIMES } from '../../assets/upload/plan'
 import { builtinThumbnailUrl, MAP_ASSETS } from '../../assets/builtin/registry'
@@ -6,9 +6,10 @@ import { clampZoom, fitRect, zoomAt } from '../../geometry/camera'
 import { contentBounds } from '../../store/actions'
 import { useActiveScene } from '../../store/campaign'
 import { setTool, useUiStore } from '../../store/ui'
+import { setSceneFog, type FogBrushShape } from '../../store/fogActions'
 import { placeLibraryEntry } from '../placement'
 import { importAndPlace } from '../uploads'
-import { buttonClass } from '../../ui/controls'
+import { buttonClass, CommitNumberInput } from '../../ui/controls'
 
 const hudButton =
   'flex size-8 items-center justify-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg'
@@ -117,6 +118,120 @@ function CalibrationBanner() {
         </button>
       </div>
       <p className="text-xs text-fg-muted">A box over more cells gives a more accurate grid.</p>
+    </div>
+  )
+}
+
+const segment =
+  'rounded-md px-2 py-0.5 text-sm text-fg-muted aria-checked:bg-surface-3 aria-checked:text-fg hover:text-fg'
+
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: readonly { value: T; label: string }[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex rounded-lg bg-surface-2 p-0.5">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          onClick={() => onChange(option.value)}
+          className={segment}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const FOG_HINTS: Record<FogBrushShape, string> = {
+  rect: 'Drag a rectangle (it snaps to the grid; hold Alt for free corners).',
+  polygon:
+    'Click the corners; click the first one, double-click or press Enter to close. Backspace removes a corner.',
+  brush: 'Drag to paint.',
+}
+
+/** Options of the Fog tool (SPEC §5.6 manual brushes): mode, shape, brush size. */
+function FogToolbar() {
+  const mode = useUiStore((s) => s.fogMode)
+  const shape = useUiStore((s) => s.fogShape)
+  const brushCells = useUiStore((s) => s.fogBrushCells)
+  const fogOn = useActiveScene().fog.enabled
+  return (
+    <div
+      role="region"
+      aria-label="Fog tool"
+      className="pointer-events-auto absolute top-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 space-y-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-lg"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented
+          label="Fog edit"
+          value={mode}
+          options={[
+            { value: 'reveal', label: 'Reveal' },
+            { value: 'hide', label: 'Hide' },
+          ]}
+          onChange={(fogMode) => useUiStore.setState({ fogMode })}
+        />
+        <Segmented
+          label="Shape"
+          value={shape}
+          options={[
+            { value: 'rect', label: 'Rectangle' },
+            { value: 'polygon', label: 'Polygon' },
+            { value: 'brush', label: 'Brush' },
+          ]}
+          onChange={(fogShape) => useUiStore.setState({ fogShape, fogDraft: null })}
+        />
+        {shape === 'brush' && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-fg-muted">Size</span>
+            <div className="w-16">
+              {/* Commits on Enter or blur, so the field can be cleared and retyped. */}
+              <CommitNumberInput
+                aria-label="Brush size in squares"
+                min={0.5}
+                max={20}
+                step={0.5}
+                value={brushCells}
+                onCommit={(fogBrushCells) => useUiStore.setState({ fogBrushCells })}
+              />
+            </div>
+            <span className="text-fg-muted">squares</span>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setTool('select')}
+          className="ml-auto flex items-center gap-1 rounded-md px-2 py-0.5 text-fg-muted hover:bg-surface-3 hover:text-fg"
+        >
+          <X aria-hidden className="size-4" />
+          Done (Esc)
+        </button>
+      </div>
+      <p className="text-xs text-fg-muted">{FOG_HINTS[shape]}</p>
+      {!fogOn && (
+        <p className="flex flex-wrap items-center gap-2 text-xs">
+          <span>Fog is off for this scene, so players see everything.</span>
+          <button
+            type="button"
+            onClick={() => setSceneFog({ enabled: true })}
+            className="rounded-md border border-border bg-surface-2 px-2 py-0.5 hover:bg-surface-3"
+          >
+            Turn on fog
+          </button>
+        </p>
+      )}
     </div>
   )
 }
@@ -231,16 +346,45 @@ function Notice() {
   )
 }
 
+function PreviewBanner() {
+  return (
+    <div
+      role="region"
+      aria-label="Preview as players"
+      className="pointer-events-auto absolute top-3 left-1/2 flex w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-accent bg-surface px-3 py-2 text-sm shadow-lg"
+    >
+      <ScanEye aria-hidden className="size-4 text-accent" />
+      <span>Previewing what players see. Editing is paused.</span>
+      <button
+        type="button"
+        onClick={() => useUiStore.setState({ previewAsPlayers: false })}
+        className="flex items-center gap-1 rounded-md px-2 py-0.5 text-fg-muted hover:bg-surface-3 hover:text-fg"
+      >
+        <X aria-hidden className="size-4" />
+        Stop preview (Esc)
+      </button>
+    </div>
+  )
+}
+
 /** HTML controls drawn over the canvas. */
 export function CanvasHud() {
   const tool = useUiStore((s) => s.tool)
+  const preview = useUiStore((s) => s.previewAsPlayers)
   const scene = useActiveScene()
   const empty =
     scene.layers.map.length + scene.layers.props.length + scene.layers.tokens.length === 0
   return (
     <div className="pointer-events-none absolute inset-0">
-      {empty && tool === 'select' && <EmptyState />}
-      {tool === 'calibrate' && <CalibrationBanner />}
+      {preview ? (
+        <PreviewBanner />
+      ) : (
+        <>
+          {empty && tool === 'select' && <EmptyState />}
+          {tool === 'calibrate' && <CalibrationBanner />}
+          {tool === 'fog' && <FogToolbar />}
+        </>
+      )}
       <ZoomControls />
       <Notice />
     </div>

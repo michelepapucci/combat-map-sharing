@@ -9,9 +9,11 @@ import {
   panBy,
   screenToWorld,
   stageTransform,
+  visibleRect,
   wheelZoomFactor,
   zoomAt,
 } from '../../geometry/camera'
+import { nearestLine } from '../../geometry/grid'
 import { itemBounds, rectFromPoints, rectsIntersect } from '../../geometry/rect'
 import { rotatedExtent, SNAP_THRESHOLD, snapCenter, tokenSpan } from '../../geometry/snap'
 import type { Point, Rect, Size } from '../../geometry/types'
@@ -25,11 +27,14 @@ import {
   movableIds,
 } from '../../store/actions'
 import { getCampaign, useActiveScene } from '../../store/campaign'
+import { addFogEdit, flatPoints } from '../../store/fogActions'
 import { notify, setSelection, setTool, useUiStore } from '../../store/ui'
 import { LIBRARY_MIME, parseLibraryEntry, placeLibraryEntry } from '../placement'
+import { closeFogPolygon } from '../fogTool'
 import { ping } from '../presentation'
 import { importAndPlace } from '../uploads'
 import { CanvasHud } from './CanvasHud'
+import { DmFogTint, PlayersPreview } from './FogViews'
 import { Overlay } from './Overlay'
 import { setPointerWorld } from './pointer'
 import { DmItems, DmTokens } from './SceneLayers'
@@ -64,6 +69,20 @@ type Gesture =
       moved: boolean
     }
   | { kind: 'calibrate'; pointerId: number; startScreen: Point; startWorld: Point; moved: boolean }
+  | {
+      kind: 'fogRect'
+      pointerId: number
+      startScreen: Point
+      startWorld: Point
+      moved: boolean
+      /** Corners snap to grid lines (snapping on, Alt not held at the start). */
+      snap: boolean
+      /** Alt was held: a click without a drag pings, like Alt+click with other tools. */
+      alt: boolean
+      /** The scene the shape is drawn in; it is dropped if the scene changed meanwhile. */
+      sceneId: Id
+    }
+  | { kind: 'fogBrush'; pointerId: number; radius: number; points: Point[]; sceneId: Id }
 
 /** The id of the scene item a Konva event hit, if any. */
 function itemIdOf(target: Konva.Node): Id | null {
@@ -128,6 +147,7 @@ export function DmCanvas() {
   const dragging = useUiStore((s) => s.liveDrag !== null)
   const hoveredId = useUiStore((s) => s.hoveredId)
   const fitPending = useUiStore((s) => s.fitPending)
+  const preview = useUiStore((s) => s.previewAsPlayers)
   const dpr = useDevicePixelRatio()
 
   // A newly opened campaign or scene (without a remembered view) is fitted once the size is known.
@@ -196,6 +216,29 @@ export function DmCanvas() {
           useUiStore.setState({ liveDrag, dragPrimaryId: gesture.primaryId, hoveredId: null })
           break
         }
+        case 'fogRect': {
+          if (!gesture.moved && distance(point, gesture.startScreen) < DRAG_THRESHOLD) return
+          gesture.moved = true
+          const { grid } = currentScene()
+          const to =
+            gesture.snap && !event.altKey
+              ? {
+                  x: nearestLine(world.x, grid.offsetX, grid.size),
+                  y: nearestLine(world.y, grid.offsetY, grid.size),
+                }
+              : world
+          useUiStore.setState({ fogDraft: { type: 'rect', from: gesture.startWorld, to } })
+          break
+        }
+        case 'fogBrush': {
+          const last = gesture.points.at(-1)
+          if (last && distance(last, world) < gesture.radius / 3) return
+          gesture.points.push(world)
+          useUiStore.setState({
+            fogDraft: { type: 'brush', points: [...gesture.points], radius: gesture.radius },
+          })
+          break
+        }
         case 'marquee':
         case 'calibrate': {
           if (!gesture.moved && distance(point, gesture.startScreen) < DRAG_THRESHOLD) return
@@ -251,6 +294,27 @@ export function DmCanvas() {
           setSelection(gesture.additive ? [...new Set([...selection, ...hits])] : hits)
           break
         }
+        case 'fogRect': {
+          const draft = useUiStore.getState().fogDraft
+          useUiStore.setState({ fogDraft: null })
+          if (!gesture.moved && gesture.alt) ping(gesture.startWorld)
+          if (!gesture.moved || draft?.type !== 'rect' || currentScene().id !== gesture.sceneId) {
+            break
+          }
+          const rect = rectFromPoints(draft.from, draft.to)
+          addFogEdit(useUiStore.getState().fogMode, { type: 'rect', ...rect })
+          break
+        }
+        case 'fogBrush': {
+          useUiStore.setState({ fogDraft: null })
+          if (currentScene().id !== gesture.sceneId) break
+          addFogEdit(useUiStore.getState().fogMode, {
+            type: 'brush',
+            points: flatPoints(gesture.points),
+            radius: gesture.radius,
+          })
+          break
+        }
         case 'calibrate': {
           setCalibration(null)
           if (!gesture.moved) break
@@ -270,6 +334,9 @@ export function DmCanvas() {
       setCalibration(null)
       setPanning(false)
       useUiStore.setState({ liveDrag: null, dragPrimaryId: null })
+      if (gesture.kind === 'fogRect' || gesture.kind === 'fogBrush') {
+        useUiStore.setState({ fogDraft: null })
+      }
       return true
     }
 
@@ -315,6 +382,62 @@ export function DmCanvas() {
     }
   }, [])
 
+  /** Fog tool: a rectangle or brush stroke starts a gesture; a polygon collects clicked corners. */
+  const startFogShape = (event: PointerEvent, point: Point, world: Point) => {
+    const { fogShape, fogBrushCells, fogDraft, dmCamera } = useUiStore.getState()
+    const { grid } = currentScene()
+    if (fogShape === 'polygon') {
+      const points = fogDraft?.type === 'polygon' ? fogDraft.points : []
+      const first = points[0]
+      const last = points.at(-1)
+      // A click on the first corner closes the polygon.
+      if (first && points.length >= 3 && distance(first, world) * dmCamera.zoom <= 10) {
+        closeFogPolygon()
+        return
+      }
+      // A second click on the last corner (a double-click) closes it too, and
+      // never adds a duplicate corner. Konva's dblclick is not used: it fires
+      // for any two clicks within 400 ms, so quick corners would close it.
+      if (last && distance(last, world) * dmCamera.zoom <= 6) {
+        if (points.length >= 3) closeFogPolygon()
+        return
+      }
+      useUiStore.setState({
+        fogDraft: { type: 'polygon', points: [...points, world], cursor: world },
+      })
+      return
+    }
+    if (fogShape === 'brush') {
+      const radius = (fogBrushCells * grid.size) / 2
+      gestureRef.current = {
+        kind: 'fogBrush',
+        pointerId: event.pointerId,
+        radius,
+        points: [world],
+        sceneId: currentScene().id,
+      }
+      useUiStore.setState({ fogDraft: { type: 'brush', points: [world], radius } })
+      return
+    }
+    const snap = getCampaign().settings.snapEnabled && !event.altKey
+    const start = snap
+      ? {
+          x: nearestLine(world.x, grid.offsetX, grid.size),
+          y: nearestLine(world.y, grid.offsetY, grid.size),
+        }
+      : world
+    gestureRef.current = {
+      kind: 'fogRect',
+      pointerId: event.pointerId,
+      startScreen: point,
+      startWorld: start,
+      moved: false,
+      snap,
+      alt: event.altKey,
+      sceneId: currentScene().id,
+    }
+  }
+
   const onPointerDown = (e: KonvaEventObject<PointerEvent>) => {
     const event = e.evt
     if (gestureRef.current) return
@@ -345,10 +468,21 @@ export function DmCanvas() {
       return
     }
     if (event.button !== 0 || isTransformerPart(e.target)) return
+    // "Preview as players" only looks: panning and zooming still work, editing does not.
+    if (useUiStore.getState().previewAsPlayers) return
 
-    // The Ping tool, and Alt+click with any other tool than Select (whose Alt+drag moves freely).
-    if (currentTool === 'ping' || (event.altKey && currentTool !== 'select')) {
+    // The Ping tool, and Alt+click with any other tool than Select (whose Alt+drag
+    // moves freely) and the fog rectangle (whose Alt+drag draws free corners; both
+    // decide on release: a click without a drag still pings).
+    const altDrags =
+      currentTool === 'select' ||
+      (currentTool === 'fog' && useUiStore.getState().fogShape === 'rect')
+    if (currentTool === 'ping' || (event.altKey && !altDrags)) {
       ping(world)
+      return
+    }
+    if (currentTool === 'fog') {
+      startFogShape(event, point, world)
       return
     }
     if (currentTool === 'calibrate') {
@@ -437,6 +571,12 @@ export function DmCanvas() {
     const { dmCamera, dmViewport, tool: currentTool, hoveredId: hovered } = useUiStore.getState()
     setPointerWorld(screenToWorld(point, dmCamera, dmViewport))
     if (gestureRef.current) return
+    const { fogDraft } = useUiStore.getState()
+    if (currentTool === 'fog' && fogDraft?.type === 'polygon') {
+      useUiStore.setState({
+        fogDraft: { ...fogDraft, cursor: screenToWorld(point, dmCamera, dmViewport) },
+      })
+    }
     const id = currentTool === 'select' ? itemIdOf(e.target) : null
     if (id !== hovered) useUiStore.setState({ hoveredId: id })
   }
@@ -480,7 +620,7 @@ export function DmCanvas() {
       ? 'grabbing'
       : spaceHeld
         ? 'grab'
-        : tool === 'calibrate' || tool === 'ping'
+        : tool === 'calibrate' || tool === 'ping' || tool === 'fog'
           ? 'crosshair'
           : hoveredMovable
             ? 'move'
@@ -518,10 +658,16 @@ export function DmCanvas() {
           onWheel={onWheel}
           onContextMenu={onContextMenu}
         >
-          <Layer visible={layerState.map.visible} listening={isLayerInteractive(scene, 'map')}>
+          {preview && (
+            <PlayersPreview cover={visibleRect(camera, viewport)} scale={transform.scale} />
+          )}
+          <Layer
+            visible={!preview && layerState.map.visible}
+            listening={!preview && isLayerInteractive(scene, 'map')}
+          >
             <DmItems items={layers.map} />
           </Layer>
-          <Layer>
+          <Layer visible={!preview} listening={!preview}>
             {grid.visible && (
               <GridShape
                 size={grid.size}
@@ -544,7 +690,8 @@ export function DmCanvas() {
               <DmTokens tokens={layers.tokens} />
             </Group>
           </Layer>
-          <Layer>
+          {!preview && <DmFogTint cover={visibleRect(camera, viewport)} />}
+          <Layer visible={!preview} listening={!preview}>
             <Overlay marquee={marquee} calibration={calibration} />
           </Layer>
         </Stage>

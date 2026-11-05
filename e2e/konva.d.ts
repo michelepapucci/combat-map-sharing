@@ -16,12 +16,22 @@ export interface KonvaNode {
     height: number
   }
   getLayer: () => unknown
+  isVisible: () => boolean
   /** Text nodes only. */
   text?: () => string
+  /** Circle nodes only. */
+  radius?: () => number
 }
 
 declare global {
   interface Window {
-    Konva?: { stages: { find: (selector: string) => KonvaNode[]; scaleX: () => number }[] }
+    Konva?: {
+      stages: {
+        find: (selector: string) => KonvaNode[]
+        scaleX: () => number
+        getLayers: () => KonvaNode[]
+        container: () => HTMLDivElement
+      }[]
+    }
   }
 }

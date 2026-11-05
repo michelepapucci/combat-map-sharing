@@ -23,6 +23,8 @@ import {
   updateItem,
 } from '../store/actions'
 import { MOD } from '../dm/shortcuts'
+import { FogSettings } from './FogSettings'
+import { TokenDetails } from './TokenDetails'
 import { useActiveScene, useCampaign } from '../store/campaign'
 import { setTool, useUiStore } from '../store/ui'
 import {
@@ -220,6 +222,7 @@ function SingleItem({ item, layer }: { item: Item; layer: LayerName }) {
         />
       </Field>
       {token && <TokenFields token={token} />}
+      {token && <TokenDetails token={token} />}
       <div className="grid grid-cols-2 gap-2">
         <Field label="Rotation (°)">
           <CommitNumberInput
@@ -247,11 +250,6 @@ function SingleItem({ item, layer }: { item: Item; layer: LayerName }) {
         </Field>
       </div>
       <ItemActions ids={[item.id]} items={[item]} />
-      {token && (
-        <p className="text-xs text-fg-muted">
-          Vision, hit points, conditions and notes arrive in milestone 5.
-        </p>
-      )}
     </div>
   )
 }
@@ -344,16 +342,19 @@ export function PropertiesPanel() {
   const single = refs.length === 1 ? refs[0] : undefined
   const heading = refs.length === 0 ? 'Grid' : 'Properties'
   return (
-    <section aria-labelledby="properties-heading" className="space-y-2">
-      <SectionHeading id="properties-heading">{heading}</SectionHeading>
-      {refs.length === 0 && <GridSettings />}
-      {single && <SingleItem key={single.item.id} item={single.item} layer={single.layer} />}
-      {refs.length > 1 && (
-        <div className="space-y-3">
-          <p className="text-sm">{refs.length} items selected</p>
-          <ItemActions ids={refs.map((ref) => ref.item.id)} items={refs.map((ref) => ref.item)} />
-        </div>
-      )}
-    </section>
+    <>
+      <section aria-labelledby="properties-heading" className="space-y-2">
+        <SectionHeading id="properties-heading">{heading}</SectionHeading>
+        {refs.length === 0 && <GridSettings />}
+        {single && <SingleItem key={single.item.id} item={single.item} layer={single.layer} />}
+        {refs.length > 1 && (
+          <div className="space-y-3">
+            <p className="text-sm">{refs.length} items selected</p>
+            <ItemActions ids={refs.map((ref) => ref.item.id)} items={refs.map((ref) => ref.item)} />
+          </div>
+        )}
+      </section>
+      {refs.length === 0 && <FogSettings />}
+    </>
   )
 }
