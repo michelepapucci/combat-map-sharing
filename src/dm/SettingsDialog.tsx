@@ -15,6 +15,7 @@ import { setAoeCoverage, setShareRuler } from '../store/templateActions'
 import { useUiStore } from '../store/ui'
 import { buttonClass, Field, inputClass, Toggle } from '../ui/controls'
 import { Dialog } from '../ui/Dialog'
+import { GistSettings } from './GistSettings'
 
 const DIAGONAL_LABELS: Record<DiagonalRule, string> = {
   five: '5e standard: a diagonal step counts as 1 square',
@@ -119,14 +120,14 @@ function StorageSection() {
       {localOnly > 0 && (
         <p className="text-fg-muted">
           {localOnly === 1 ? '1 image is' : `${localOnly} images are`} too large to sync to a gist
-          and will exist only in this browser.
+          and will exist only in this browser and in backups (Campaigns, Export).
         </p>
       )}
     </div>
   )
 }
 
-/** Campaign settings and device storage. Gist sync joins in milestone 8. */
+/** Gist sync, campaign settings and device storage. */
 const COVERAGE_LABELS: Record<AoeCoverageRule, string> = {
   center: 'Squares whose center is inside (5e default)',
   half: 'Squares at least half covered',
@@ -141,6 +142,12 @@ export function SettingsDialog() {
   return (
     <Dialog title="Settings" onClose={() => useUiStore.setState({ dialog: null })}>
       <div className="space-y-6">
+        <section aria-labelledby="settings-sync" className="space-y-3">
+          <h3 id="settings-sync" className="text-sm font-medium">
+            Sync with a GitHub Gist
+          </h3>
+          <GistSettings />
+        </section>
         <section aria-labelledby="settings-rules" className="space-y-3">
           <h3 id="settings-rules" className="text-sm font-medium">
             Rules

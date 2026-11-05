@@ -24,6 +24,8 @@ import {
 } from '../store/templateActions'
 import { closeFogPolygon, removeLastFogCorner } from './fogTool'
 import { flushSave } from './session'
+import { saveToGist } from './gist'
+import { useGistStore } from '../store/gist'
 
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 export const MOD = IS_MAC ? '⌘' : 'Ctrl'
@@ -153,13 +155,20 @@ export function handleShortcut(event: KeyboardEvent): boolean {
       case 'd':
         if (selection.length > 0) duplicateItems(selection)
         return true
-      case 's':
-        // Saves now instead of opening the browser's "Save page" (gist sync takes it over in M8).
+      case 's': {
+        // "Save to Gist" when this campaign syncs with one (SPEC §7); otherwise
+        // saves in this browser now instead of opening the browser's "Save page".
+        const gist = useGistStore.getState()
+        if (gist.token && gist.link) {
+          void saveToGist()
+          return true
+        }
         flushSave().then(
           () => notify('Saved in this browser.'),
           () => undefined, // the save indicator shows the error
         )
         return true
+      }
       default:
         return false
     }

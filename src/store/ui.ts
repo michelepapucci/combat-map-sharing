@@ -56,7 +56,7 @@ export interface DmUiState extends UiState {
   /** Fit the view to the scene's content as soon as the canvas knows its size. */
   fitPending: boolean
   /** Open modal dialog (the cheat sheet has its own flag). */
-  dialog: 'campaigns' | 'settings' | null
+  dialog: 'campaigns' | 'settings' | 'gist-history' | null
   /** Library asset shown in the asset dialog. */
   editingAssetId: Id | null
   /** Pings drawn in the DM window (they are also sent to players). */

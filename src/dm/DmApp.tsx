@@ -25,6 +25,8 @@ import { CampaignsDialog } from './CampaignsDialog'
 import { DmCanvas } from './canvas/DmCanvas'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ContextMenu } from './ContextMenu'
+import { GistHistoryDialog } from './GistHistoryDialog'
+import { GistIndicator } from './GistIndicator'
 import { SaveIndicator } from './SaveIndicator'
 import { SceneBar } from './SceneBar'
 import { setBlackout } from './presentation'
@@ -99,6 +101,7 @@ function Dialogs() {
     <>
       {dialog === 'campaigns' && <CampaignsDialog />}
       {dialog === 'settings' && <SettingsDialog />}
+      {dialog === 'gist-history' && <GistHistoryDialog />}
       <AssetDialog />
     </>
   )
@@ -129,6 +132,7 @@ function Workspace() {
         <CampaignButton />
         <HistoryButtons />
         <SaveIndicator />
+        <GistIndicator />
         <BlackoutBadge />
         <div className="ml-auto flex items-center gap-2">
           <IconButton

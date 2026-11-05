@@ -10,6 +10,7 @@ import {
   setLastCampaignId,
   writeCampaign,
 } from '../persistence/db'
+import { removeGistLink } from '../persistence/gistLinks'
 import { createCampaign } from '../state/defaults'
 import { newId } from '../state/ids'
 import { migrateToCurrent } from '../state/migrations'
@@ -26,6 +27,7 @@ import { loadDevicePrefs } from '../store/devicePrefs'
 import { useSessionStore, type SessionState } from '../store/session'
 import { notify, notifySticky, resetUiForCampaign, sceneSwitched } from '../store/ui'
 import { pendingUploads } from './pendingUploads'
+import { startGist, stopGist } from './gist'
 import { startPresentation, stopPresentation } from './presentation'
 
 /**
@@ -84,8 +86,9 @@ function errorMessage(error: unknown): string {
 function saveErrorMessage(error: unknown): string {
   if (isQuotaError(error)) {
     return (
-      'Browser storage is full, so recent changes are not saved. Free space by deleting ' +
-      'unused images or other campaigns (backup export and gist sync arrive in later milestones).'
+      'Browser storage is full, so recent changes are not saved. Export a backup (Campaigns) ' +
+      'or save to a gist (Settings) first, then free space by deleting unused images or ' +
+      'other campaigns.'
     )
   }
   return `Saving failed: ${errorMessage(error)}`
@@ -262,9 +265,10 @@ export async function openCampaign(id: string): Promise<void> {
   await refreshCampaigns().catch(() => undefined)
 }
 
-export async function duplicateCampaign(id: string): Promise<void> {
+/** Duplicates a stored campaign; true when the copy was stored. */
+export async function duplicateCampaign(id: string): Promise<boolean> {
   const open = useCampaignStore.getState().campaign
-  if (open?.id === id && !(await saveBeforeLeaving())) return
+  if (open?.id === id && !(await saveBeforeLeaving())) return false
   try {
     const source = await readValidCampaign(id)
     const now = Date.now()
@@ -277,10 +281,45 @@ export async function duplicateCampaign(id: string): Promise<void> {
     }
     await writeCampaign(copy)
     notify(`Created ${copy.name}.`)
+    await refreshCampaigns().catch(() => undefined)
+    return true
   } catch (error) {
     notify(`The campaign could not be duplicated: ${errorMessage(error)}`)
+    await refreshCampaigns().catch(() => undefined)
+    return false
   }
+}
+
+/**
+ * Stores and opens a campaign that came from outside this device (a backup or a
+ * gist), already migrated and validated. A different open campaign is saved
+ * first; when the incoming one replaces the open campaign (same id, the DM chose
+ * to overwrite it), its pending save is written first and then superseded, so an
+ * old save can never land after the new version. False if it was not stored or
+ * the tab lost the lock meanwhile.
+ */
+export async function adoptCampaign(campaign: CampaignState): Promise<boolean> {
+  const at = epoch
+  const open = useCampaignStore.getState().campaign
+  const replacing = open?.id === campaign.id
+  if (open && !replacing && !(await saveBeforeLeaving())) return false
+  if (replacing) {
+    await flushSave().catch(() => undefined)
+    stopAutosave()
+  }
+  // A tab that lost the lock meanwhile must not overwrite what the new tab edits.
+  if (!current(at)) return false
+  try {
+    if (!useSessionStore.getState().storageUnavailable) await writeCampaign(campaign)
+  } catch (error) {
+    if (replacing && current(at)) startAutosave()
+    notifySticky([`The campaign could not be stored. ${saveErrorMessage(error)}`])
+    return false
+  }
+  if (!current(at)) return false
+  showCampaign(campaign, at)
   await refreshCampaigns().catch(() => undefined)
+  return true
 }
 
 /**
@@ -294,6 +333,8 @@ export async function deleteCampaign(id: string): Promise<void> {
   try {
     if (deletingOpen) stopAutosave()
     await removeCampaign(id)
+    // Its gist link would otherwise come back with a re-imported copy.
+    await removeGistLink(id).catch(() => undefined)
     await refreshCampaigns()
     if (!current(at)) return
     if (deletingOpen || useSessionStore.getState().phase === 'failed') {
@@ -355,6 +396,7 @@ function stepAside(): void {
   epoch += 1
   releaseLock = null
   stopPresentation()
+  stopGist()
   stopAutosave()
   unloadCampaign()
   setSession({ phase: 'inactive', inactiveReason: 'taken-over' })
@@ -436,6 +478,7 @@ async function claim(stealing: boolean): Promise<void> {
     }
     // Player windows follow whichever tab holds the DM lock.
     startPresentation()
+    startGist({ adoptCampaign, duplicateCampaign, flushSave })
     await openInitialCampaign(epoch)
   } catch (error) {
     unloadCampaign()

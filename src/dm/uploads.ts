@@ -77,7 +77,7 @@ async function importOne(
     pendingUploads.delete(id)
     notes.push(
       isQuotaError(error)
-        ? `${file.name}: browser storage is full. Delete unused images or campaigns to make room.`
+        ? `${file.name}: browser storage is full. Export a backup, then delete unused images or campaigns to make room.`
         : `${file.name} could not be stored (${error instanceof Error ? error.message : 'unknown error'}).`,
     )
     return null

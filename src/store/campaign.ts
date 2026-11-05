@@ -62,9 +62,14 @@ function withActiveScene(campaign: CampaignState, preferred: Id): CampaignState 
   })
 }
 
+/**
+ * Marks a change. updatedAt only ever grows, even when this computer's clock is
+ * behind the one that last saved the campaign (a gist pulled from another
+ * device): sync compares it with the value at the last sync.
+ */
 function touched(campaign: CampaignState): CampaignState {
   return produce(campaign, (draft) => {
-    draft.updatedAt = Date.now()
+    draft.updatedAt = Math.max(Date.now(), campaign.updatedAt + 1)
   })
 }
 

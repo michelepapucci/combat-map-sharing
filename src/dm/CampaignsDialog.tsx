@@ -1,10 +1,11 @@
-import { Copy, FolderOpen, Plus, Trash } from 'lucide-react'
-import { useEffect } from 'react'
+import { Copy, Download, FolderOpen, Plus, Trash, Upload } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useCampaign } from '../store/campaign'
 import { useSessionStore } from '../store/session'
 import { useUiStore } from '../store/ui'
 import { buttonClass, CommitTextInput, Field, primaryButtonClass } from '../ui/controls'
 import { Dialog } from '../ui/Dialog'
+import { exportBackup, importBackup } from './backup'
 import { confirmAction } from './confirm'
 import {
   deleteCampaign,
@@ -36,6 +37,7 @@ export function CampaignsDialog() {
   const currentName = useCampaign((c) => c.name)
   const campaigns = useSessionStore((s) => s.campaigns)
   const unavailable = useSessionStore((s) => s.storageUnavailable)
+  const backupInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     void refreshCampaigns()
@@ -130,7 +132,45 @@ export function CampaignsDialog() {
           )}
           <p className="text-xs text-fg-muted">
             Campaigns and uploaded images are saved in this browser only. Clearing site data deletes
-            them.
+            them: keep a backup, or sync with a GitHub Gist (Settings).
+          </p>
+        </section>
+        <section aria-labelledby="backup-heading" className="space-y-2">
+          <h3 id="backup-heading" className="text-sm font-medium">
+            Backup
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={buttonClass} onClick={() => void exportBackup()}>
+              <Download aria-hidden className="size-4" />
+              Export “{currentName}” (.zip)
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={unavailable}
+              onClick={() => backupInput.current?.click()}
+            >
+              <Upload aria-hidden className="size-4" />
+              Import a backup…
+            </button>
+            <input
+              ref={backupInput}
+              type="file"
+              accept=".zip,application/zip"
+              aria-label="Backup file to import"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (!file) return
+                close()
+                void importBackup(file)
+              }}
+            />
+          </div>
+          <p className="text-xs text-fg-muted">
+            A backup holds the campaign and all its images, including the ones too large for a gist.
+            Keep it somewhere safe; importing it brings everything back.
           </p>
         </section>
       </div>
