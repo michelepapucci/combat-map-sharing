@@ -1,0 +1,182 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc", "unicorn", "import", "jsx-a11y", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "ignorePatterns": ["dist", "coverage", "playwright-report", "test-results"],
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ],
+    "import/no-unassigned-import": [
+      "warn",
+      {
+        "allow": ["**/*.css"]
+      }
+    ],
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/geometry/**", "src/projection/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react",
+                "message": "src/geometry and src/projection are pure TypeScript: no React, Konva, stores, browser storage or app UI. Take state as parameters."
+              },
+              {
+                "name": "react-dom",
+                "message": "src/geometry and src/projection are pure TypeScript: no React, Konva, stores, browser storage or app UI. Take state as parameters."
+              },
+              {
+                "name": "react-konva",
+                "message": "src/geometry and src/projection are pure TypeScript: no React, Konva, stores, browser storage or app UI. Take state as parameters."
+              },
+              {
+                "name": "konva",
+                "message": "src/geometry and src/projection are pure TypeScript: no React, Konva, stores, browser storage or app UI. Take state as parameters."
+              },
+              {
+                "name": "zustand",
+                "message": "src/geometry and src/projection are pure TypeScript: no React, Konva, stores, browser storage or app UI. Take state as parameters."
+              },
+              {
+                "name": "idb",
+                "message": "src/geometry and src/projection are pure TypeScript: no React, Konva, stores, browser storage or app UI. Take state as parameters."
+              },
+              {
+                "name": "lucide-react",
+                "message": "src/geometry and src/projection are pure TypeScript: no React, Konva, stores, browser storage or app UI. Take state as parameters."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "react/**",
+                  "react-dom/**",
+                  "react-konva/**",
+                  "konva/**",
+                  "zustand/**",
+                  "idb/**",
+                  "lucide-react/**",
+                  "**/store",
+                  "**/store/**",
+                  "**/persistence",
+                  "**/persistence/**",
+                  "**/canvas",
+                  "**/canvas/**",
+                  "**/dm",
+                  "**/dm/**",
+                  "**/panels",
+                  "**/panels/**",
+                  "**/tools",
+                  "**/tools/**",
+                  "**/gist",
+                  "**/gist/**",
+                  "**/sync",
+                  "**/sync/**",
+                  "**/player",
+                  "**/player/**",
+                  "**/app",
+                  "**/app/**"
+                ],
+                "message": "src/geometry and src/projection are pure TypeScript: no React, Konva, stores, browser storage or app UI. Take state as parameters."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/player/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/dm",
+                  "**/dm/**",
+                  "**/panels",
+                  "**/panels/**",
+                  "**/tools",
+                  "**/tools/**",
+                  "**/gist",
+                  "**/gist/**",
+                  "**/store",
+                  "**/store/**",
+                  "**/app/App",
+                  "**/app/App.*",
+                  "**/persistence",
+                  "**/persistence/**",
+                  "!**/persistence/assetBlobs",
+                  "!**/persistence/assetBlobs.ts"
+                ],
+                "message": "The player window renders only PlayerViewState received over the sync channel. It must not import the DM store, DM UI, campaign persistence or gist code; asset blobs come from persistence/assetBlobs (see CLAUDE.md, Projection rule)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/canvas/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "zustand",
+                "message": "Canvas renderers are shared with the player window: props only, no stores."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "**/dm",
+                  "**/dm/**",
+                  "**/panels",
+                  "**/panels/**",
+                  "**/tools",
+                  "**/tools/**",
+                  "**/gist",
+                  "**/gist/**",
+                  "**/store",
+                  "**/store/**",
+                  "**/app/App",
+                  "**/app/App.*",
+                  "**/persistence",
+                  "**/persistence/**",
+                  "!**/persistence/assetBlobs",
+                  "!**/persistence/assetBlobs.ts",
+                  "zustand/**"
+                ],
+                "message": "Canvas renderers are shared with the player window: props only. Connect them to the DM store from src/dm, not here."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

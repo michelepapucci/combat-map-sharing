@@ -1,0 +1,9 @@
+dist
+coverage
+playwright-report
+test-results
+package-lock.json
+# Kept verbatim as written by the product owner.
+docs/SPEC.md
+# Frozen schema fixtures: never edit once committed.
+src/state/fixtures/*.json

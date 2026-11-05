@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+
+/*
+ * Theme tokens. The DM UI is dark by default (the app is used in dim rooms) with
+ * an opt-in light theme via <html data-theme="light">. Components use the
+ * semantic utilities generated below (bg-surface, text-fg-muted, border-border,
+ * text-accent, ...) instead of raw palette colours, so both themes stay in sync.
+ */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e1014;
+  --surface: #15181e;
+  --surface-2: #1c2028;
+  --surface-3: #252a34;
+  --border: #2d323d;
+  --fg: #e7e9ee;
+  --fg-muted: #9ba2ae;
+  --accent: #e3a83b;
+  --accent-fg: #1c1304;
+  --danger: #f0605a;
+  --ok: #57c27d;
+  --focus: #79b8ff;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #e9ecf1;
+  --surface: #f8f9fb;
+  --surface-2: #ffffff;
+  --surface-3: #e2e6ec;
+  --border: #c9cfd8;
+  --fg: #171a20;
+  --fg-muted: #555d6b;
+  --accent: #9a6100;
+  --accent-fg: #ffffff;
+  --danger: #c62f28;
+  --ok: #1d7f45;
+  --focus: #1f6feb;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+  --color-focus: var(--focus);
+  /* System fonts only: the app makes no runtime requests besides the GitHub API. */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg font-sans text-fg antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+/* The player window (set by index.html before first paint, then by App) is always black. */
+html[data-view='player'],
+html[data-view='player'] body {
+  background: #000;
+  color-scheme: dark;
+}

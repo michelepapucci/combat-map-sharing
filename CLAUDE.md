@@ -1,0 +1,216 @@
+# Combat Map: a DM-only virtual tabletop
+
+Working guide for this repository, for humans and AI agents. It is authoritative here: `CLAUDE.md` files in parent directories describe other projects and do not apply. The product spec is [docs/SPEC.md](docs/SPEC.md) (verbatim apart from a two-line preface); this file records how it is being built and every decision that refines or deviates from it. **Update it at the end of every milestone** (status table, architecture, decisions).
+
+## What it is
+
+A static-site virtual tabletop for D&D 5e combat with exactly one user, the DM, and two same-origin windows:
+
+- `#/dm`: the editor. Owns the full `CampaignState` and every tool.
+- `#/player`: the presentation window on a TV, projector or screen-share. Renders only `PlayerViewState` received over `BroadcastChannel('vtt-sync')`, and never writes state.
+
+State lives in the DM's browser (IndexedDB) and can be synced to a GitHub Gist with a personal access token. No backend, no accounts, no runtime network calls except the GitHub API. UI language: English.
+
+## Commands
+
+Node 24 (`.nvmrc`) and npm.
+
+| Command                           | Purpose                                                                                            |
+| --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `npm run dev`                     | Dev server at <http://localhost:5173/combat-map-sharing/> (same base path as Pages)                |
+| `npm run build`                   | `tsc -b`, then `vite build` into `dist/`                                                           |
+| `npm run preview`                 | Serve `dist/` (port 4173)                                                                          |
+| `npm run typecheck`               | `tsc -b` over the app (`tsconfig.app.json`) and configs + e2e (`tsconfig.node.json`)               |
+| `npm run lint`                    | oxlint (`.oxlintrc.json`) with `--deny-warnings`: warnings fail too                                |
+| `npm run format` / `format:check` | Prettier                                                                                           |
+| `npm test` / `test:watch`         | Vitest unit tests (`src/**/*.test.ts(x)`, Node environment)                                        |
+| `npm run test:e2e`                | Playwright: fresh `vite build`, served by `vite preview` on port 4179 under `/combat-map-sharing/` |
+| `npm run check`                   | typecheck + lint + format check + unit tests. Run before every commit, plus `test:e2e`             |
+
+First e2e run on a machine: `npx playwright install chromium`. The app needs a secure context (https or `localhost`): opening the dev server through a LAN IP over http shows an error instead of the app.
+
+CI/deploy (`.github/workflows/pages.yml`): checks and tests run on pushes to `master` and to milestone branches (`m<N>-<slug>`), on PRs and on manual runs. Only `master` (push or manual run) builds with `BASE_PATH` from `actions/configure-pages` and deploys to <https://michelepapucci.github.io/combat-map-sharing/>.
+
+## Milestone status
+
+Work happens on one branch per milestone (`m<N>-<slug>`, CI runs on push), merged into `master` (which deploys) after the DM has tested it. The next milestone branches from `master` after that merge.
+
+| #   | Milestone                                                                                           | Status                                  |
+| --- | --------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1   | Scaffold + deploy: Vite/React/TS, hash routes, Pages workflow, CLAUDE.md, data model, migrations    | Done on `m1-scaffold`, awaiting DM test |
+| 2   | Canvas core: pan/zoom, grid + calibration, layers, built-in assets, transform, snapping, undo, keys | Next                                    |
+| 3   | Library + persistence: uploads in IndexedDB, library panel, autosave, scenes, campaign validator    | Not started                             |
+| 4   | Player window: sync, `projectForPlayers`, camera modes, ping, blackout, hidden items                | Not started                             |
+| 5   | Tokens & fog: token properties, vision, fog (visible/explored/manual), preview as players           | Not started                             |
+| 6   | Initiative tracker with player visibility                                                           | Not started                             |
+| 7   | Ruler + AoE templates                                                                               | Not started                             |
+| 8   | Gist sync + local zip backup                                                                        | Not started                             |
+| 9   | Polish + tests: onboarding, toasts, performance, remaining tests, README                            | Not started                             |
+
+## Projection rule (the security boundary)
+
+> **The player window never receives data it should not render.** Not "receives and hides": never receives.
+
+- `projectForPlayers(campaign, ui, devicePrefs): PlayerViewState` (pure, `src/projection/`, milestone 4) is the only producer of campaign-derived data for the player window. Other sync messages carry no campaign data, except a ping's `x, y`.
+- **Whitelist, never spread.** Build every output object as an object literal, field by field. Never `...token`, never return a filtered or mapped campaign array, never pass campaign objects through. A field added to `Token` later must not reach players unless someone adds it to the projection on purpose.
+- The player types in `src/state/types.ts` are dedicated types that never reuse campaign types. That catches extra keys only in object literals: TypeScript does **not** catch a spread or a passed-through object. The real guard is the tests below.
+- DM-only means **every field not in `PlayerViewState`**. In particular: `name` of items, tokens, scenes and assets; `hidden`; `dmNotes`; `hp.current`/`hp.max`; token `kind` (npc vs enemy is a spoiler); initiative values, tiebreaks and modifiers.
+- What is removed (SPEC §3, §5.6–§5.9):
+  - hidden items on every layer (`hidden: true`), and every item on a layer whose `layerState.visible` is false;
+  - with fog on, enemy and NPC tokens that are not currently visible (nine-point footprint test), including those in explored-but-dim areas. Player tokens are always sent. Props in explored areas are sent; props in unexplored (black) areas are not;
+  - vision circles of tokens that are not vision sources. A vision source is a non-hidden token on a visible tokens layer, with `visionFt > 0`, that is a player (or an NPC when `settings.npcVision`). One selector in `src/geometry` decides this for both fog rendering and the projection;
+  - initiative entries whose effective visibility is hidden (`'hidden'`, or `'auto'` while the linked token is missing, hidden or on a hidden layer), with no placeholders; the whole tracker unless `visibleToPlayers`; values always. `PlayerToken.active` (the pulsing ring) is true only when the tracker is shown and the active entry is effectively visible. Entry names are player-facing by definition (see `InitiativeEntry.name`); `hpFraction` is sent only for public HP bars;
+  - HP numbers (only `hpFraction` when `hp.publicBar`), labels unless `showLabel`;
+  - the ruler unless `settings.shareRuler`; when shared it is sent as points plus precomputed feet and cells. Templates with `visibleToPlayers: false`; players never get affected-square counts;
+  - during blackout, everything: the view is `{ blackout: true, splashAssetId }`, and pings are not sent.
+- **Drags.** Fog vision uses **committed** positions: vision does not move while a token is dragged (SPEC §5.6 reveal timing). Player tokens are shown at their live drag position. An enemy or NPC token is shown at its live position only while that position is itself visible under the committed vision; otherwise it is omitted until the drop.
+- **Map images are the deliberate exception.** The player loads the whole map blob and fog covers the unexplored parts, so fog rendering must fail closed: the player fog layer starts as an opaque black rectangle over the viewport and explored/visible regions are cut out of it (`destination-out`). Unexplored parts are never "painted black" afterwards, and a new scene's map appears only once its fog is ready.
+- The player window reads asset blobs from IndexedDB only through `src/persistence/assetBlobs.ts`, by the ids it was sent, and never loads the campaign. Lint (`.oxlintrc.json`) blocks direct imports from `src/player/**` and `src/canvas/**` of `dm`, `panels`, `tools`, `gist`, `store`, `app/App` and every `persistence` module except `assetBlobs`; `src/architecture.test.ts` checks the transitive import graph from `PlayerApp` and that both windows are lazy-loaded chunks. An e2e test checks the player page never requests the DM chunk.
+- Both windows share one origin and one event loop, and the player window has `window.opener`. The boundary is therefore code discipline enforced by the checks above, not process isolation. Player code must never touch `window.opener`.
+- Tests (required before milestone 4 is done): fill **every** string and number field of a sample campaign with unique canaries and assert that only whitelisted values appear in `JSON.stringify(projectForPlayers(...))`; one test per case above (hidden, fogged, hidden vision source, live drag into darkness, blackout, initiative visibility and `active`, HP, ruler, templates); an exact-key test per player type that fails when a new field appears. SPEC §9's e2e "hidden token is absent from the player view" is a milestone 4 done-criterion.
+
+## Data model
+
+Source of truth: [`src/state/types.ts`](src/state/types.ts) (documented field by field). Summary:
+
+- `CampaignState { version, id, name, scenes[], activeSceneId, sceneMemory, library: AssetMeta[], settings, presentation, createdAt, updatedAt }`
+- `Scene { id, name, grid, layers { map: Item[], props: Item[], tokens: Token[] }, layerState, fog { enabled, exploredEnabled, manual }, initiative, templates: AoeTemplate[] }`
+- `sceneMemory: Record<sceneId, { explored: FogMask, playerView: ViewRect | null }>`: per-scene state that undo must never touch, kept outside `scenes`.
+- `Item { id, assetId, name, x, y, width, height, rotation, locked, hidden, opacity }`: center-anchored, world px, rotation in degrees clockwise about the center.
+- `Token extends Item { kind, sizeCategory, visionFt, label, showLabel, badge, hp, conditions, color, dmNotes, initiativeModifier }`; `badge` is the 1–3 characters drawn on built-in "initials" tokens.
+- `FogMask { cellPx, chunks }`: sparse chunked bitmap (base64 per 64×64-cell chunk, trailing zero bytes omitted).
+- `Initiative { entries, activeEntryId, round, visibleToPlayers }`; entries carry `value`, `dexTiebreak`, `manualOrder`, `visibility: 'auto' | 'hidden' | 'shown'`.
+- `Presentation { cameraMode, blackout, splashAssetId }`. `Camera { x, y, zoom }` is the DM window's camera; views shared with players are `ViewRect { x, y, width, height }` (world px), which the player fits to its own screen.
+- Transient (never persisted): `UiState` (tool, selection, DM camera and viewport size, ruler, temporary template, preview-as-players, live drag positions) and `Ping`.
+- Player side: `PlayerViewState` = `{ blackout: true, splashAssetId }` or `{ blackout: false, scene: PlayerViewScene }`, built only from the `Player*` types.
+
+Rules: plain JSON only (no classes, Maps, typed arrays, Dates); persisted data has no optional keys (absent values are `null`); array order is z-order and scene order. Factories live in `src/state/defaults.ts` (`createCampaign`, `createScene`, `createSceneMemory`).
+
+### Schema changes
+
+Every persisted campaign carries `version`; [`src/state/migrations.ts`](src/state/migrations.ts) upgrades old documents one version at a time. `migrateToCurrent` checks only the version: from milestone 3, every load, import and gist pull must also run `validateCampaign`, which rebuilds the document field by field (dropping unknown and `__proto__` keys) and checks enums, finite numbers and references, before anything is used or saved.
+
+**Until milestone 3 ships persistence, schema v1 is still mutable**: no campaign has ever been saved, so change `types.ts`, `defaults.ts` and `fixtures/sampleCampaign.ts` freely and regenerate `campaign.v1.json` (step 3). From the first deploy that persists campaigns, follow every step:
+
+1. bump `CURRENT_SCHEMA_VERSION` and add `MIGRATIONS[old]` (pure JSON → JSON, no app imports);
+2. update `src/state/types.ts`, `defaults.ts`, the validator and `fixtures/sampleCampaign.ts` to the new shape. A field added in v*N* must hold, in the sample, exactly the value `MIGRATIONS[N-1]` produces from the old sample; test other values in separate unit tests;
+3. add the new frozen fixture (run from the repo root; `sampleCampaign.ts` may only use `import type`): `node -e "import('./src/state/fixtures/sampleCampaign.ts').then(m=>process.stdout.write(JSON.stringify(m.sampleCampaign,null,2)+'\n'))" > /tmp/v.json && mv /tmp/v.json src/state/fixtures/campaign.v<new>.json`;
+4. never edit committed `campaign.v*.json` files once a version has shipped. The test suite migrates every one of them and expects the current sample.
+
+## Architecture
+
+Planned design for the whole project. Items marked (M*n*) are built in that milestone; refine them here when they are built.
+
+- **Coordinates.** World px = map pixels at scale 1. Grid cell (i, j) spans `[offsetX + i·size, offsetX + (i+1)·size)`. A token's footprint is `FOOTPRINT_CELLS[sizeCategory]` cells and its `width`/`height` always equal footprint × `grid.size` (rewritten when the size category or grid size changes; the Transformer only rotates tokens). Odd footprints snap the center to cell centers, even ones to grid intersections. Props snap per axis on their axis-aligned footprint: at multiples of 90° swap w/h, then an odd span snaps the center to a cell center and an even span to an intersection; sizes snap to whole cells. Snapping is magnetic (within 25% of a cell) and Alt disables it. Feet = cells × `feetPerCell`.
+- **State (M2).** Zustand stores in `src/store/` (DM only; the player can never import them): `campaign` (the persisted `CampaignState`, changed only through actions using Immer `produceWithPatches`) and `ui` (`UiState`), later `sync`/`gist` status. Undo history keeps `{ patches, inversePatches, label, coalesceKey }` entries (cap ~200); a drag or slider gesture commits once with a coalesce key. History records `scenes` and `name` only; `sceneMemory`, `presentation`, `settings`, `library` and `updatedAt` are changed outside recorded actions. Undo covers fog toggles, manual fog edits, initiative edits and turn changes. Replacing the campaign (load, import, gist pull) clears history; deleting an in-use asset (after the spec's warning) removes its items and clears history, since the blob cannot come back. **No import-time side effects** in DM modules: stores are created empty, and hydration, autosave, IndexedDB and BroadcastChannel start from `DmApp` effects. Components subscribe with narrow selectors; a drag moves Konva nodes and `ui.liveDrag`, and commits on drop.
+- **Rendering (M2, M4, M5).** One react-konva `Stage` per window with layers map → props → tokens → overlays (grid, templates, ruler, pings, selection, `Transformer`) → fog. Map images are **not** `cache()`d (an 8k map at DPR 2 hits Chrome's maximum canvas area and caching a single bitmap gains nothing): the locked map layer is `listening(false)`, images use `perfectDrawEnabled(false)` and are decoded once. `cache()` is only for groups of many vector shapes, with an explicit `pixelRatio` and a size guard. The grid is one custom `Shape` drawing only the lines in view. Renderers in `src/canvas/` take props only and are shared: the DM canvas (wired to the store in `src/dm/`) adds DM decorations (hidden badge, fog tint); the player canvas renders `PlayerViewState`; "Preview as players" renders `projectForPlayers(...)` through the player renderer inside the DM window, so it matches by construction. Transformer: `keepRatio={false}` so Shift keeps the ratio; Konva always scales about the center while Alt is held, which we accept (Alt also disables snapping). Heavy work (downscaling, hashing, base64, fog rasterizing) runs in Workers, because both windows share one event loop and a long DM task freezes the TV.
+- **Sync (M4).** `src/sync/` owns a typed protocol on `BroadcastChannel('vtt-sync')`, every message tagged `{ v: 1, type }`. Player → DM: `hello { clientId }` on load, `bye` on `pagehide`. DM → player: `view` (a full `PlayerViewState`, sent on `hello`, on change, and at most every 50 ms while dragging; it carries a fog revision so the player re-rasterizes only when fog changed) and `ping { id, x, y, sceneId }` (the player times it on receipt). Presence uses Web Locks, not timers (background tabs throttle timers to once a minute): the DM holds `vtt:dm` for its lifetime and the player holds `vtt:player`; each side learns the other is gone when its pending request for the other's lock is granted. The player shows "connecting…" only before its first view; afterwards it keeps the last frame with a small "DM disconnected" badge. The DM shows toasts on player connect/disconnect.
+- **Single DM window (M3/M4).** Only the tab holding the `vtt:dm` Web Lock autosaves, syncs gists and broadcasts. A second `#/dm` tab opens read-only with "Open in another tab: Take over" (`steal: true`); a tab that loses the lock drops to read-only.
+- **Assets (M2, M3).** Built-in assets are generated SVGs in a code registry with ids `builtin:<kind>/<name>`; they are never stored or uploaded. "Initials" tokens draw `Token.badge` on a built-in circle tinted with `Token.color`. Uploads (PNG/JPEG/WebP) are finalized at import: downscaled to ≤ 8192 px on the long side (with a notice), re-encoded to WebP if over the gist limit, hashed (SHA-256), and stored as blobs in IndexedDB under a random id, so `AssetMeta` always describes exactly the blob that is stored and synced. If still too large, the asset is `localOnly`.
+- **Persistence (M3).** `idb` database `vtt` with stores `campaigns` (id → campaign JSON), `assets` (id → Blob) and `meta` (last campaign id, remembered PAT, per-campaign gist sync record). Several local campaigns, with a minimal campaign menu (new, open, duplicate, delete). Autosave 1 s after the last change, with a "saved" indicator; quota errors show a message suggesting export or gist sync. Load = `migrateToCurrent` + `validateCampaign`. Call `navigator.storage.persist()` after the first save; show its result and usage in Settings, and remind the DM to download a backup when `localOnly` assets exist (Safari may still evict storage after 7 days without a visit; backups are the real protection).
+- **Fog (M5).** Visible area = union of circles around vision sources (see Projection rule) at committed positions, plus manual edits applied in order (`reveal` = fully visible, `hide` = black). Explored memory (in `sceneMemory`) grows by every committed change to the visible area while players can see the scene (fog and explored memory on, no blackout): a drag adds the capsule swept from origin to destination; nudges, paste, placement, unhide and `visionFt`/`kind`/`npcVision` changes add the new circles. During blackout nothing is recorded; lifting blackout records the current circles. If the grid is calibrated while the mask is still empty, recreate it at the new quarter-cell size; otherwise keep its `cellPx`. A token counts as visible if any of nine sample points of its footprint (center, corners, edge midpoints) is visible. The player window renders fail-closed (see Projection rule): black outside explored areas, dim over explored-but-not-visible ones, clear inside visible ones. The DM window shows the same regions as a light tint.
+- **Gist (M8).** `fetch` to the GitHub REST API with the PAT and `cache: 'no-cache'` on every GET (API responses are cacheable for 60 s). Files: `vtt-manifest.json`, `campaign.json`, `asset-<id>.b64`. Change and conflict detection uses the gist's latest commit SHA (`GET /gists/{id}/commits?per_page=1`), stored per device after each pull/push; a full `GET /gists/{id}` (which inlines up to 1 MB per file) only when it changed. If the remote SHA differs at push time, ask: overwrite, load remote, or save a local copy (a duplicate campaign) first. Push in a few batched PATCHes under a byte budget: missing assets first (diffed by hash), then manifest and `campaign.json` together last; delete unreferenced remote assets; honour `Retry-After` and secondary rate limits. Truncated files are fetched from the sha-pinned `raw_url` with a **bare** `fetch(rawUrl)`, no headers at all (gist.githubusercontent.com rejects CORS preflights). Limits: about 7 MB per asset (base64 must stay under 10 MB) and at most ~290 synced assets (the API lists 300 files per gist); a top-level `truncated` gist is an explicit error. The history dialog lists commits and loads a revision lazily, labelling revisions without a matching `campaign.json`. Local zip backup (fflate) holds `campaign.json` plus asset blobs; SPEC §9's zip round-trip e2e is an M8 done-criterion.
+- **Testing.** Pure logic (`src/geometry`, `src/projection`, migrations and validation, initiative sorting, gist serialization with a mocked API) is unit-tested in Node. `src/architecture.test.ts` guards the module boundaries. Playwright smoke tests run against a fresh production build and fail on any console error, including CSP violations.
+
+## Folder layout
+
+```
+src/
+  main.tsx      entry: secure-context check, renders App (M1)
+  app/          shell: hash routing, lazy window loading, theme, NotFound (M1)
+  dm/           DM window: layout (M1); store wiring for canvas and panels (M2+)
+  player/       player window: PlayerApp, openPlayerWindow (M1); sync client + canvas (M4)
+  state/        pure data: types.ts, ids.ts, defaults.ts, migrations.ts, fixtures/ (M1); validate.ts (M3)
+  store/        Zustand stores, actions, undo history: DM only (M2)
+  geometry/     pure math: grid, snapping, distances, footprints, vision sources, AoE, fog mask (M2+)
+  projection/   projectForPlayers, pure (M4)
+  canvas/       react-konva renderers shared by the DM, player and preview views; props only (M2+)
+  tools/        tool controllers: select, measure, aoe, fog, ping, calibrate (M2+)
+  panels/       DM side panels: library, properties, layers, scenes, initiative, settings (M2+)
+  assets/       built-in SVG generators and registry (M2), upload pipeline (M3)
+  persistence/  IndexedDB schema, autosave, campaigns (M3); assetBlobs.ts, the only module the player may use (M3); zip backup (M8)
+  sync/         BroadcastChannel protocol, Web Locks presence (M4)
+  gist/         GitHub API client, gist (de)serialization, sync engine (M8)
+  ui/           shared UI primitives: buttons, dialogs, toasts, context menu (M2+)
+  styles/       index.css: Tailwind entry and theme tokens (M1)
+  architecture.test.ts   module-boundary guards (M1)
+e2e/            Playwright smoke tests
+public/         static files copied as-is (favicon)
+docs/SPEC.md    the product spec
+.github/workflows/pages.yml   CI and Pages deploy
+```
+
+## Conventions
+
+- TypeScript strict plus `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns` (both tsconfigs). Lint forbids `any` and non-null assertions (`typescript/no-explicit-any`, `typescript/no-non-null-assertion`); justify any inline disable with `// oxlint-disable-next-line <rule> -- reason`.
+- Lint-enforced boundaries (`.oxlintrc.json` overrides; they see direct imports only, `src/architecture.test.ts` covers the transitive graph):
+  - `src/geometry/**` and `src/projection/**`: no React, Konva, zustand, `idb` or lucide (including subpaths), and no app modules except `src/state`. No `.tsx` files there.
+  - `src/player/**` and `src/canvas/**`: no `dm`, `panels`, `tools`, `gist`, `store`, `app/App`, or `persistence` except `persistence/assetBlobs`; `src/canvas/**` also no zustand.
+- Styling: Tailwind v4, configured in CSS (`src/styles/index.css`; there is no `tailwind.config.js`). Use the semantic tokens `bg-bg`, `bg-surface`, `bg-surface-2`, `bg-surface-3`, `border-border`, `text-fg`, `text-fg-muted`, `text-accent`, `bg-accent`/`text-accent-fg`, `text-danger`, `text-ok`, `outline-focus`; no raw palette colors in the DM UI. Keep text at WCAG AA contrast (4.5:1). The player window is always black (`html[data-view='player']`).
+- Icons: `lucide-react`. Icon-only buttons have `aria-label` and a `title` that includes the shortcut. Hidden and locked states use icons as well as color.
+- Network: none at runtime except the GitHub API and gist raw URLs. The production CSP (`vite.config.ts`) enforces it; see Decision 6 for the full policy. When a feature needs another source (for example an image from another origin), change the CSP and its e2e test deliberately.
+- Device preferences (theme, player zoom lock `vtt:lockedCellPx`, later the remembered PAT) never go in `CampaignState`, so they don't travel with gists or backups. localStorage keys use the `vtt:` prefix.
+- Tests are colocated as `*.test.ts(x)`; they run in Node by default. Add `jsdom` and `// @vitest-environment jsdom` only for files that need a DOM. Use `toStrictEqual` for data (it catches `undefined` keys).
+- Commit at the end of each milestone, on that milestone's branch.
+
+## Toolchain notes
+
+The versions are newer than most training data, so check the installed types before relying on memory:
+
+- TypeScript 7 (native compiler); `tsc -b` type-checks both projects.
+- Vite 8 (Rolldown) with `@vitejs/plugin-react` 6; Tailwind 4.3 via `@tailwindcss/vite`; oxlint 1.91 (not ESLint; `no-restricted-imports` supports negated `!` globs) and Prettier.
+- React 19.3, react-konva 19.3, Konva 10, zustand 5, immer 11, idb 8, fflate 0.8, lucide-react.
+- Vitest 5 and Playwright 1.64 (Chromium only; CI installs the headless shell).
+- GitHub Actions: checkout v7, setup-node v7, configure-pages v6, upload-pages-artifact v5, deploy-pages v5, upload-artifact v7.
+
+## Decisions
+
+Choices where the spec was ambiguous, incomplete or in conflict with a technical constraint. Milestone 1 decisions are implemented; the rest are the plan and may be revised (record the revision here) when their milestone is built.
+
+### Milestone 1 (implemented)
+
+1. **Deploy branch is `master`.** The spec says `main`; this repository only has `master`. Build and deploy jobs run only for `refs/heads/master`.
+2. **One workflow for CI and deploy.** Typecheck, lint, format check, unit tests and e2e tests run on `master`, milestone branches, PRs and manual runs, and gate the Pages build.
+3. **Base path.** `BASE_PATH` env var; CI passes `actions/configure-pages`' `base_path`, which also handles user sites and custom domains. It defaults to `/combat-map-sharing/` locally too, so dev matches production.
+4. **Routing.** A ~30-line hash router (`parseHash` + `useSyncExternalStore`) instead of react-router. An empty hash opens the DM view and rewrites the URL to `#/dm`. Each window is a lazily loaded chunk.
+5. **Styling.** Tailwind v4 (the spec allowed Tailwind or CSS modules) with CSS-variable theme tokens. Dark by default. The theme is a per-device preference in localStorage, applied before first paint by a small inline script, which also makes the player window black from the first frame.
+6. **Content-Security-Policy** in production builds (a `<meta>` tag right after `<meta charset>`; Pages cannot send headers): `default-src 'self'`; `script-src 'self'` plus the hash of the inline theme script (newlines normalized); `style-src 'self' 'unsafe-inline'`; `img-src 'self' blob: data:`; `font-src 'self'`; `connect-src 'self' blob: data: https://api.github.com https://gist.githubusercontent.com`; `worker-src 'self' blob:`; `object-src 'none'`; `base-uri 'self'`; `form-action 'none'`. It enforces the "no runtime network" constraint mechanically. Not applied in dev, because Vite's dev server injects inline scripts.
+7. **Linting.** oxlint (the current Vite template's default) with the React, jsx-a11y, import and Vitest plugins, warnings denied, plus Prettier. `react-in-jsx-scope` (obsolete with the automatic JSX runtime) and `jsx-a11y/prefer-tag-over-role` (it would require `<output>` for status messages) are off.
+8. **Fonts and icons.** System font stacks, since web fonts would be a runtime network call. Icons from `lucide-react` (ISC license).
+9. **UI language is English,** like every UI string in the spec.
+10. **The whole stack is installed in M1,** so later milestones start from pinned, mutually compatible versions.
+11. **The player window title is the generic "Player view".** It is visible on the shared screen, so it must not show campaign or scene names.
+12. **Secure context required.** The app refuses to start over plain http on a non-localhost address, because `crypto.randomUUID`, `crypto.subtle` and Web Locks need a secure context.
+
+### Data model (refinements of SPEC §4)
+
+13. **Items are center-anchored,** rotating about the center. This makes snapping footprints to cell centers and rotating with the Transformer straightforward.
+14. **Pings are transient.** They, the live ruler, temporary templates, selection and the DM camera live in transient `UiState`, not in `Scene` (the spec's `Scene.pings` is marked transient anyway).
+15. **No optional keys in persisted data.** Optional values are explicit `null`, and the state is plain JSON throughout. Stable shapes make migrations, Immer patches and gist round-trips predictable.
+16. **Initiative refinements:**
+    - `activeEntryId` replaces `currentIndex`, so editing values or re-sorting cannot move the turn;
+    - `manualOrder` holds the drag-and-drop tiebreak;
+    - `visibility: 'auto' | 'hidden' | 'shown'` implements "hidden tokens' entries are hidden automatically, but can be unhidden separately". `'auto'` follows the token (missing, hidden or on a hidden layer = hidden), not its fog visibility;
+    - entry names are player-facing: created from the token's label when shown, otherwise its name, and editable;
+    - `Token.initiativeModifier` stores the per-token modifier for "roll for selected enemies".
+17. **Built-in assets are not in `library`.** They live in a code registry (`builtin:` ids); `library` holds uploads only, which are the only assets synced to gists. Built-in "initials" tokens draw `Token.badge`.
+18. **Undo-exempt state lives outside `scenes`.** Explored fog memory and the pushed player view are in `CampaignState.sceneMemory`, because Immer records scene splices (reorder, duplicate, delete) as whole-element replaces: undoing one would otherwise roll them back. Explored memory is never undone because players have already seen it.
+19. **Explored fog storage.** A sparse map of 64×64-cell chunks at a quarter-cell resolution, base64 per chunk with trailing zero bytes omitted, so it works on an unbounded canvas and is already compact for the gist. Manual fog edits are undoable.
+20. **Manual fog edits apply in order on top of automatic fog.** `reveal` makes an area fully visible, including the tokens in it; `hide` makes it black.
+21. **Layer visibility hides a layer from players too,** so "hidden" means the same thing everywhere. Hidden tokens are not vision sources; to reveal an area without showing a token, use a manual reveal.
+22. **Presentation is campaign-level and not undoable,** except the player zoom lock ("1 cell = N px"), which depends on the physical display and is a device preference. Shared views are world rectangles (`ViewRect`) fitted to the player's screen, so a pushed or followed view shows the same area on any screen size. 'fit-explored' frames explored ∪ visible areas, or the map layer bounds when fog or explored memory is off.
+23. **NPC vision** ("optionally allow it on NPC allies") is a campaign setting, `npcVision`; NPCs only reveal fog when their `visionFt` is set.
+24. **Players see only the fraction of public HP,** never the numbers, on tokens and in the tracker. Token `kind` is never sent.
+25. **Default grid size is 70 world px,** a common VTT default. The DM calibrates it to each map.
+26. **Token size follows the grid.** Width/height = footprint × grid size, rewritten on calibration and size-category changes; tokens are rotated, not resized, with the Transformer.
+
+### Later milestones (planned)
+
+27. **Sync sends throttled full snapshots, no diffs (M4).** The projection carries asset ids, not blobs, so it stays small; a fog revision lets the player skip re-rasterizing unchanged fog.
+28. **Presence and the single DM window use Web Locks (M3/M4),** not heartbeat timers, which background tabs throttle to once a minute.
+29. **Token visibility in fog uses nine sample points of the footprint (M5),** so a large creature that is partly in view is shown.
+30. **Assets are finalized at import (M3).** Downscaling and re-encoding happen when the file is imported, so the stored blob is exactly what is synced and `AssetMeta.hash/mime/bytes` stay true on every machine.
+31. **Gist asset size limit is about 7 MB (M8).** Base64 inflates files by 4/3 and gist files over 10 MB cannot be fetched through the API, so an asset must be under about 7.5 MB before encoding; the spec's ~8 MB would exceed 10 MB once encoded. Larger assets stay local-only (`localOnly: true`). A gist also lists at most 300 files, so at most ~290 assets sync.
+32. **Gist conflicts compare commit SHAs, not `updated_at` (M8),** and API GETs bypass the browser cache. "Save a local copy first" duplicates the campaign locally.
+33. **Gist connection data and the PAT are device-local (M8).** The gist id, last synced commit SHA, auto-sync settings (interval, last pushed hash) and the token live in the IndexedDB `meta` store, not in `CampaignState`, so they are never written into the gist or into exports.
+34. **Shared origin (M8).** Every GitHub Pages project site of an account shares the origin `https://michelepapucci.github.io`, so any other site published there can read this app's IndexedDB (including a remembered PAT) and its BroadcastChannel. The token UI recommends a fine-grained token with only the Gists permission and an expiry date, and says that "Remember token" stores it readable by other sites on the same origin. A custom domain for this repository would remove the issue (only `DEFAULT_BASE` and the Playwright base would change).
