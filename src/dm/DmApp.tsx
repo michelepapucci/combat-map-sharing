@@ -1,17 +1,35 @@
-import { Keyboard, MonitorUp, Moon, Redo2, Sun, Swords, Undo2 } from 'lucide-react'
+import {
+  ChevronDown,
+  Keyboard,
+  MonitorUp,
+  Moon,
+  Redo2,
+  Settings,
+  Sun,
+  Swords,
+  Undo2,
+} from 'lucide-react'
 import { useEffect } from 'react'
 import { useTheme } from '../app/theme'
+import { AssetDialog } from '../panels/AssetDialog'
 import { LayersPanel } from '../panels/LayersPanel'
 import { LibraryPanel } from '../panels/LibraryPanel'
 import { PropertiesPanel } from '../panels/PropertiesPanel'
 import { openPlayerWindow } from '../player/openPlayerWindow'
-import { createCampaign } from '../state/defaults'
 import { pruneSelection, redoAction, undoAction } from '../store/actions'
-import { loadCampaign, useCampaignStore } from '../store/campaign'
+import { useCampaign, useCampaignStore } from '../store/campaign'
+import { useSessionStore } from '../store/session'
 import { useUiStore } from '../store/ui'
 import { IconButton } from '../ui/controls'
+import { CampaignsDialog } from './CampaignsDialog'
 import { DmCanvas } from './canvas/DmCanvas'
+import { ConfirmDialog } from './ConfirmDialog'
 import { ContextMenu } from './ContextMenu'
+import { SaveIndicator } from './SaveIndicator'
+import { SceneBar } from './SceneBar'
+import { startSession } from './session'
+import { InactiveScreen, LoadFailedScreen, StartingScreen } from './SessionScreens'
+import { SettingsDialog } from './SettingsDialog'
 import { MOD, useShortcuts } from './shortcuts'
 import { ShortcutsDialog } from './ShortcutsDialog'
 import { Toolbar } from './Toolbar'
@@ -41,6 +59,33 @@ function HistoryButtons() {
   )
 }
 
+function CampaignButton() {
+  const name = useCampaign((c) => c.name)
+  return (
+    <button
+      type="button"
+      onClick={() => useUiStore.setState({ dialog: 'campaigns' })}
+      title="Campaigns: rename, new, open, duplicate, delete"
+      aria-label={`Campaign: ${name}. Manage campaigns`}
+      className="flex max-w-64 min-w-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-medium hover:bg-surface-3"
+    >
+      <span className="truncate">{name}</span>
+      <ChevronDown aria-hidden className="size-4 shrink-0 text-fg-muted" />
+    </button>
+  )
+}
+
+function Dialogs() {
+  const dialog = useUiStore((s) => s.dialog)
+  return (
+    <>
+      {dialog === 'campaigns' && <CampaignsDialog />}
+      {dialog === 'settings' && <SettingsDialog />}
+      <AssetDialog />
+    </>
+  )
+}
+
 function Workspace() {
   const [theme, setTheme] = useTheme()
   const nextTheme = theme === 'dark' ? 'light' : 'dark'
@@ -57,17 +102,23 @@ function Workspace() {
         if (event.detail > 0 && button && !button.closest('[role="menu"], dialog')) button.blur()
       }}
     >
-      <header className="flex items-center gap-3 border-b border-border bg-surface px-3 py-2">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-surface px-3 py-2">
         <Swords aria-hidden className="size-5 text-accent" />
         <h1 className="text-sm font-semibold tracking-wide">Combat Map</h1>
-        <span className="text-xs text-fg-muted">DM view</span>
+        <CampaignButton />
         <HistoryButtons />
+        <SaveIndicator />
         <div className="ml-auto flex items-center gap-2">
           <IconButton
             icon={Keyboard}
             label="Keyboard shortcuts"
             title="Keyboard shortcuts (?)"
             onClick={() => useUiStore.setState({ shortcutsOpen: true })}
+          />
+          <IconButton
+            icon={Settings}
+            label="Settings"
+            onClick={() => useUiStore.setState({ dialog: 'settings' })}
           />
           <IconButton
             icon={theme === 'dark' ? Sun : Moon}
@@ -87,7 +138,11 @@ function Workspace() {
 
       <div className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)_19rem]">
         <Toolbar />
-        <main aria-label="Map canvas" className="min-h-0 min-w-0">
+        <main
+          aria-label="Map canvas"
+          className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]"
+        >
+          <SceneBar />
           <DmCanvas />
         </main>
         <aside
@@ -101,24 +156,36 @@ function Workspace() {
       </div>
       <ContextMenu />
       <ShortcutsDialog />
+      <Dialogs />
     </div>
   )
 }
 
 /**
- * DM window (`#/dm`). Loads a campaign on mount (a fresh one until milestone 3
- * adds persistence) and renders the editor once it is there.
+ * DM window (`#/dm`). Starts the DM session (lock, last campaign, autosave) and
+ * renders the editor once this tab holds the lock and a campaign is loaded.
  */
 export function DmApp() {
+  const phase = useSessionStore((s) => s.phase)
   const loaded = useCampaignStore((s) => s.campaign !== null)
 
   useEffect(() => {
-    if (!useCampaignStore.getState().campaign) loadCampaign(createCampaign())
+    startSession()
     // Keep the selection valid whatever changed the campaign (undo, layer locks, deletes).
     return useCampaignStore.subscribe((state, previous) => {
       if (state.campaign !== previous.campaign) pruneSelection()
     })
   }, [])
 
-  return loaded ? <Workspace /> : null
+  let content = null
+  if (phase === 'inactive') content = <InactiveScreen />
+  else if (phase === 'failed') content = <LoadFailedScreen />
+  else if (phase === 'ready' && loaded) content = <Workspace />
+  else content = <StartingScreen />
+  return (
+    <>
+      {content}
+      <ConfirmDialog />
+    </>
+  )
 }

@@ -17,6 +17,12 @@ export const inputClass =
 export const buttonClass =
   'inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-sm text-fg hover:bg-surface-3 disabled:opacity-50 disabled:hover:bg-surface-2'
 
+export const primaryButtonClass =
+  'inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:brightness-110 disabled:opacity-50'
+
+export const dangerButtonClass =
+  'inline-flex items-center justify-center gap-1.5 rounded-md border border-danger/60 px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50'
+
 export function Field({
   label,
   children,

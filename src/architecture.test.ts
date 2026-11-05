@@ -77,6 +77,20 @@ describe('architecture', () => {
     expect(forbidden).toStrictEqual([])
   })
 
+  it('player and shared canvas code read only asset blobs, never the database itself', () => {
+    const shared = [...reachableFrom('/src/player/PlayerApp.tsx')].filter(
+      (file) => !file.startsWith('/src/persistence/'),
+    )
+    const offenders = shared.filter((file) =>
+      /\bopenVttDb\b|\bindexedDB\b/.test(sources[file] ?? ''),
+    )
+    expect(offenders).toStrictEqual([])
+    const canvas = Object.keys(sources).filter((file) => file.startsWith('/src/canvas/'))
+    expect(
+      canvas.filter((file) => /\bopenVttDb\b|\bindexedDB\b/.test(sources[file] ?? '')),
+    ).toStrictEqual([])
+  })
+
   it('the app shell loads each window lazily, so the bundles stay separate', () => {
     const windows = importsOf('/src/app/App.tsx').filter(({ target }) =>
       ['/src/dm/DmApp.tsx', '/src/player/PlayerApp.tsx'].includes(target),

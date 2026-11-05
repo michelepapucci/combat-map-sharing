@@ -17,26 +17,6 @@ interface NodeInfo {
   screenW: number
 }
 
-declare global {
-  interface Window {
-    Konva?: { stages: { find: (selector: string) => KonvaNode[]; scaleX: () => number }[] }
-  }
-}
-interface KonvaNode {
-  id: () => string
-  getClassName: () => string
-  x: () => number
-  y: () => number
-  width: () => number
-  getClientRect: (config?: { skipStroke?: boolean; relativeTo?: unknown }) => {
-    x: number
-    y: number
-    width: number
-    height: number
-  }
-  getLayer: () => unknown
-}
-
 async function items(page: Page): Promise<NodeInfo[]> {
   return page.evaluate(() => {
     const stage = window.Konva?.stages[0]
@@ -77,7 +57,9 @@ async function startWithMap(page: Page, errors: string[]) {
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto('./#/dm')
   await page.getByRole('button', { name: 'Grass' }).click()
-  await expect(page.getByRole('heading', { name: 'Pick a default map to start' })).toBeHidden()
+  await expect(
+    page.getByRole('heading', { name: 'Drop a map image here or pick a default map' }),
+  ).toBeHidden()
 }
 
 function libraryButton(page: Page, name: string) {
@@ -269,7 +251,7 @@ test('calibration sets the grid from a box over N x N cells', async ({ page }) =
   await page.mouse.down()
   await page.mouse.move(from.x + 150 * scale, from.y + 150 * scale, { steps: 5 })
   await page.mouse.up()
-  await expect(page.getByRole('status')).toHaveText('Grid set to 75 px per cell')
+  await expect(page.getByText('Grid set to 75 px per cell')).toBeVisible()
   await expect(page.getByRole('spinbutton', { name: 'Cell size (px)' })).toHaveValue('75')
   await expect(page.getByRole('region', { name: 'Grid calibration' })).toBeHidden()
   expect(errors).toStrictEqual([])

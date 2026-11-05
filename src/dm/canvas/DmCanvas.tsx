@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Group, Layer, Stage } from 'react-konva'
 import { GridShape } from '../../canvas/GridShape'
 import {
+  fitRect,
   panBy,
   screenToWorld,
   stageTransform,
@@ -15,10 +16,17 @@ import { rotatedExtent, SNAP_THRESHOLD, snapCenter, tokenSpan } from '../../geom
 import type { Point, Rect, Size } from '../../geometry/types'
 import { allItems, findItem, isItemMovable, isLayerInteractive } from '../../state/sceneOps'
 import type { Id, Token } from '../../state/types'
-import { calibrateGrid, currentScene, moveItems, movableIds } from '../../store/actions'
+import {
+  calibrateGrid,
+  contentBounds,
+  currentScene,
+  moveItems,
+  movableIds,
+} from '../../store/actions'
 import { getCampaign, useActiveScene } from '../../store/campaign'
 import { notify, setSelection, setTool, useUiStore } from '../../store/ui'
 import { LIBRARY_MIME, parseLibraryEntry, placeLibraryEntry } from '../placement'
+import { importAndPlace } from '../uploads'
 import { CanvasHud } from './CanvasHud'
 import { Overlay } from './Overlay'
 import { setPointerWorld } from './pointer'
@@ -117,6 +125,17 @@ export function DmCanvas() {
   const tool = useUiStore((s) => s.tool)
   const dragging = useUiStore((s) => s.liveDrag !== null)
   const hoveredId = useUiStore((s) => s.hoveredId)
+  const fitPending = useUiStore((s) => s.fitPending)
+
+  // A newly opened campaign or scene (without a remembered view) is fitted once the size is known.
+  useEffect(() => {
+    if (!fitPending || viewport.width === 0 || viewport.height === 0) return
+    const bounds = contentBounds(scene)
+    useUiStore.setState({
+      fitPending: false,
+      dmCamera: bounds ? fitRect(bounds, viewport) : { x: 0, y: 0, zoom: 1 },
+    })
+  }, [fitPending, viewport, scene])
 
   // Track the canvas size.
   useEffect(() => {
@@ -414,20 +433,21 @@ export function DmCanvas() {
 
   const onDrop = (event: DragEvent) => {
     event.preventDefault()
-    if (event.dataTransfer.types.includes('Files')) {
-      notify('Uploading your own images arrives in milestone 3. For now, use the built-in library.')
-      return
-    }
-    const entry = parseLibraryEntry(event.dataTransfer.getData(LIBRARY_MIME))
     const rect = containerRef.current?.getBoundingClientRect()
-    if (!entry || !rect) return
+    if (!rect) return
     const { dmCamera, dmViewport } = useUiStore.getState()
     const world = screenToWorld(
       { x: event.clientX - rect.left, y: event.clientY - rect.top },
       dmCamera,
       dmViewport,
     )
-    placeLibraryEntry(entry, world, event.altKey)
+    // Image files dropped on the canvas are maps (Decision 54).
+    if (event.dataTransfer.types.includes('Files')) {
+      void importAndPlace([...event.dataTransfer.files], 'map', world, event.altKey)
+      return
+    }
+    const entry = parseLibraryEntry(event.dataTransfer.getData(LIBRARY_MIME))
+    if (entry) placeLibraryEntry(entry, world, event.altKey)
   }
 
   const transform = stageTransform(camera, viewport)

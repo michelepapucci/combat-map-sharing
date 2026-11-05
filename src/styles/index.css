@@ -18,7 +18,7 @@
   --fg-muted: #9ba2ae;
   --accent: #e3a83b;
   --accent-fg: #1c1304;
-  --danger: #f0605a;
+  --danger: #f26a64;
   --ok: #57c27d;
   --focus: #79b8ff;
 }
@@ -34,7 +34,7 @@
   --fg-muted: #555d6b;
   --accent: #9a6100;
   --accent-fg: #ffffff;
-  --danger: #c62f28;
+  --danger: #b92a24;
   --ok: #1d7f45;
   --focus: #1f6feb;
 }
@@ -79,4 +79,11 @@ html[data-view='player'],
 html[data-view='player'] body {
   background: #000;
   color-scheme: dark;
+}
+
+/* Loading screens appear only if loading takes a moment (see StartingScreen). */
+@keyframes fade-in {
+  to {
+    opacity: 1;
+  }
 }

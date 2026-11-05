@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Grid3x3, Lock, LockOpen, Trash }
 import { useEffect, useRef } from 'react'
 import { TOKEN_COLORS } from '../assets/builtin/registry'
 import { findItem } from '../state/sceneOps'
+import { MAX_NAME_LENGTH } from '../state/validate'
 import {
   FOOTPRINT_CELLS,
   SIZE_CATEGORIES,
@@ -213,6 +214,7 @@ function SingleItem({ item, layer }: { item: Item; layer: LayerName }) {
           key={item.id}
           ref={nameRef}
           value={item.name}
+          maxLength={MAX_NAME_LENGTH}
           onCommit={(name) => updateItem(item.id, { name })}
         />
       </Field>

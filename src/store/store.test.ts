@@ -51,7 +51,14 @@ const entry = (label: string, key: string | null, time: number): HistoryEntry =>
   inversePatches: [{ op: 'replace', path: ['name'], value: `before ${label}` }],
   coalesceKey: key,
   time,
+  sceneBefore: 's1',
+  sceneAfter: 's1',
 })
+
+/** An entry made entirely in `scene`. */
+function inScene(scene: string, time: number): HistoryEntry {
+  return { ...entry(scene, 'grid-opacity', time), sceneBefore: scene, sceneAfter: scene }
+}
 
 describe('history', () => {
   it('coalesces consecutive entries with the same key within the window', () => {
@@ -69,6 +76,12 @@ describe('history', () => {
     past = pushEntry(past, entry('d', 'slider', 3000))
     past = pushEntry(past, entry('e', 'other', 3100))
     expect(past).toHaveLength(3)
+  })
+
+  it('never coalesces changes made in different scenes', () => {
+    let past = pushEntry([], inScene('s1', 0))
+    past = pushEntry(past, inScene('s2', 300))
+    expect(past).toHaveLength(2)
   })
 
   it(`keeps at most ${HISTORY_LIMIT} entries`, () => {
@@ -171,7 +184,7 @@ describe('editing', () => {
     nudgeItems([a], 70, 0)
     deleteItems([a])
     expect(token(a)).toMatchObject({ x: 35, y: 35 })
-    expect(useUiStore.getState().notice?.text).toMatch(/Unlock/)
+    expect(useUiStore.getState().notice?.lines.join(' ')).toMatch(/Unlock/)
   })
 
   it('coalesces repeated nudges', () => {

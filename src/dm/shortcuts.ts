@@ -12,8 +12,9 @@ import {
   undoAction,
 } from '../store/actions'
 import { useCampaignStore } from '../store/campaign'
-import { setSelection, setTool, useUiStore } from '../store/ui'
+import { isModalOpen, notify, setSelection, setTool, useUiStore } from '../store/ui'
 import { getPointerWorld } from './canvas/pointer'
+import { flushSave } from './session'
 
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 export const MOD = IS_MAC ? '⌘' : 'Ctrl'
@@ -26,6 +27,7 @@ export const SHORTCUT_GROUPS: readonly {
   {
     title: 'Editing',
     rows: [
+      { keys: [`${MOD}+S`], action: 'Save now (it also saves on its own)' },
       { keys: [`${MOD}+Z`], action: 'Undo' },
       { keys: [`${MOD}+Shift+Z`, `${MOD}+Y`], action: 'Redo' },
       { keys: [`${MOD}+C`], action: 'Copy' },
@@ -92,7 +94,7 @@ const ARROWS: Record<string, [number, number]> = {
 export function handleShortcut(event: KeyboardEvent): boolean {
   const ui = useUiStore.getState()
   // No shortcuts while a drag is in flight: the drop commits positions computed at its start.
-  if (!useCampaignStore.getState().campaign || ui.shortcutsOpen || ui.liveDrag) return false
+  if (!useCampaignStore.getState().campaign || isModalOpen(ui) || ui.liveDrag) return false
   const selection = ui.selection
   const mod = event.ctrlKey || event.metaKey
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
@@ -115,6 +117,13 @@ export function handleShortcut(event: KeyboardEvent): boolean {
         return true
       case 'd':
         if (selection.length > 0) duplicateItems(selection)
+        return true
+      case 's':
+        // Saves now instead of opening the browser's "Save page" (gist sync takes it over in M8).
+        flushSave().then(
+          () => notify('Saved in this browser.'),
+          () => undefined, // the save indicator shows the error
+        )
         return true
       default:
         return false
@@ -163,6 +172,8 @@ export function useShortcuts(): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || isTypingTarget(event.target)) return
+      // Dialogs and menus handle their own keys (Delete in the scene menu must not delete items).
+      if (event.target instanceof Element && event.target.closest('dialog, [role="menu"]')) return
       if (handleShortcut(event)) event.preventDefault()
     }
     window.addEventListener('keydown', onKeyDown)

@@ -1,11 +1,14 @@
-import { Maximize, Minus, Plus, X } from 'lucide-react'
-import { useEffect } from 'react'
+import { LoaderCircle, Maximize, Minus, Plus, Upload, X } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { IMAGE_MIMES } from '../../assets/upload/plan'
 import { builtinThumbnailUrl, MAP_ASSETS } from '../../assets/builtin/registry'
 import { clampZoom, fitRect, zoomAt } from '../../geometry/camera'
 import { contentBounds } from '../../store/actions'
 import { useActiveScene } from '../../store/campaign'
 import { setTool, useUiStore } from '../../store/ui'
 import { placeLibraryEntry } from '../placement'
+import { importAndPlace } from '../uploads'
+import { buttonClass } from '../../ui/controls'
 
 const hudButton =
   'flex size-8 items-center justify-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg'
@@ -119,6 +122,8 @@ function CalibrationBanner() {
 }
 
 function EmptyState() {
+  const fileInput = useRef<HTMLInputElement>(null)
+  const importing = useUiStore((s) => s.importProgress !== null)
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
       <section
@@ -127,19 +132,40 @@ function EmptyState() {
       >
         <div className="space-y-1">
           <h2 id="empty-state-heading" className="text-lg font-medium">
-            Pick a default map to start
+            Drop a map image here or pick a default map
           </h2>
           <p className="text-sm text-fg-muted">
-            Then drag tokens and props from the library on the right. Uploading your own maps
-            arrives in milestone 3.
+            Your own maps can be PNG, JPEG or WebP; they are saved in this browser. Then drag tokens
+            and props from the library on the right.
           </p>
         </div>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={importing}
+          onClick={() => fileInput.current?.click()}
+        >
+          <Upload aria-hidden className="size-4" />
+          Upload a map…
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept={IMAGE_MIMES.join(',')}
+          hidden
+          aria-label="Upload a map"
+          onChange={(event) => {
+            const files = [...(event.target.files ?? [])]
+            event.target.value = ''
+            void importAndPlace(files, 'map', null)
+          }}
+        />
         <ul className="grid grid-cols-3 gap-3">
           {MAP_ASSETS.map((asset) => (
             <li key={asset.id}>
               <button
                 type="button"
-                onClick={() => placeLibraryEntry({ type: 'image', assetId: asset.id }, null)}
+                onClick={() => placeLibraryEntry({ type: 'asset', assetId: asset.id }, null)}
                 className="group w-full space-y-1.5 rounded-lg border border-border bg-surface-2 p-2 hover:border-accent"
               >
                 <img
@@ -159,23 +185,47 @@ function EmptyState() {
 
 function Notice() {
   const notice = useUiStore((s) => s.notice)
+  const progress = useUiStore((s) => s.importProgress)
   useEffect(() => {
-    if (!notice) return
+    if (!notice || notice.sticky) return
     const timer = setTimeout(() => {
       if (useUiStore.getState().notice?.id === notice.id) useUiStore.setState({ notice: null })
     }, 3500)
     return () => clearTimeout(timer)
   }, [notice])
+  const box =
+    'pointer-events-auto max-w-[min(36rem,calc(100vw-4rem))] rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-lg'
   return (
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2"
+      className="pointer-events-none absolute bottom-16 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
     >
-      {notice && (
-        <p className="rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-lg">
-          {notice.text}
+      {progress && (
+        <p className={`${box} flex items-center gap-2`}>
+          <LoaderCircle aria-hidden className="size-4 animate-spin text-fg-muted" />
+          Importing image {Math.min(progress.done + 1, progress.total)} of {progress.total}…
         </p>
+      )}
+      {notice && (
+        <div className={`${box} flex items-start gap-2`}>
+          <div className="space-y-1">
+            {notice.lines.map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+          </div>
+          {notice.sticky && (
+            <button
+              type="button"
+              onClick={() => useUiStore.setState({ notice: null })}
+              aria-label="Dismiss message"
+              title="Dismiss"
+              className="-my-0.5 -mr-1 shrink-0 rounded-md p-1 text-fg-muted hover:bg-surface-3 hover:text-fg"
+            >
+              <X aria-hidden className="size-4" />
+            </button>
+          )}
+        </div>
       )}
     </div>
   )

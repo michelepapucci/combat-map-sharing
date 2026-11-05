@@ -1,10 +1,6 @@
 import type { Draft } from 'immer'
-import {
-  badgeStyleFor,
-  getBuiltinImageAsset,
-  getTokenPreset,
-  KIND_COLORS,
-} from '../assets/builtin/registry'
+import { badgeStyleFor, getTokenPreset, KIND_COLORS } from '../assets/builtin/registry'
+import { findUpload, placeableImage } from '../assets/catalog'
 import { calibrateFromBox, clampGridSize, mod, nearestLine } from '../geometry/grid'
 import { itemBounds, rectCenter, unionRects } from '../geometry/rect'
 import { snapCenter, tokenSpan } from '../geometry/snap'
@@ -12,6 +8,7 @@ import type { Point, Rect } from '../geometry/types'
 import { createItem, createToken } from '../state/defaults'
 import { newId } from '../state/ids'
 import { autoBadge, nextNumberedName } from '../state/naming'
+import { MAX_NAME_LENGTH } from '../state/validate'
 import {
   allItems,
   findItem,
@@ -29,7 +26,9 @@ import {
   type LayerName,
   type LayerState,
   type Scene,
+  type SizeCategory,
   type Token,
+  type TokenKind,
 } from '../state/types'
 import {
   activeSceneOf,
@@ -116,24 +115,29 @@ export interface PlaceOptions {
   snap: boolean
 }
 
-/** Places a token from a library preset centered at `at`. Returns its id. */
-export function placeToken(presetId: string, at: Point, { snap }: PlaceOptions): Id | null {
-  const preset = getTokenPreset(presetId)
-  if (!preset) return null
+/** What a newly placed token is made from: a preset or an uploaded token image. */
+interface TokenSpec {
+  assetId: string
+  name: string
+  kind: TokenKind
+  sizeCategory: SizeCategory
+}
+
+function placeTokenFrom(spec: TokenSpec, at: Point, { snap }: PlaceOptions): Id {
   const scene = currentScene()
   const name = nextNumberedName(
-    preset.name,
+    spec.name,
     scene.layers.tokens.map((t) => t.name),
   )
-  const span = tokenSpan(preset.sizeCategory, scene.grid.size)
+  const span = tokenSpan(spec.sizeCategory, scene.grid.size)
   const center = snap ? snapCenter(at, { width: span, height: span }, scene.grid, Infinity) : at
   const token = createToken({
-    assetId: preset.assetId,
+    assetId: spec.assetId,
     name,
-    kind: preset.kind,
-    sizeCategory: preset.sizeCategory,
-    color: useUiStore.getState().tokenColor ?? KIND_COLORS[preset.kind],
-    badge: autoBadge(badgeStyleFor(preset.assetId), name),
+    kind: spec.kind,
+    sizeCategory: spec.sizeCategory,
+    color: useUiStore.getState().tokenColor ?? KIND_COLORS[spec.kind],
+    badge: autoBadge(badgeStyleFor(spec.assetId), name),
     x: center.x,
     y: center.y,
     gridSize: scene.grid.size,
@@ -145,6 +149,31 @@ export function placeToken(presetId: string, at: Point, { snap }: PlaceOptions):
   return token.id
 }
 
+/** Places a token from a library preset centered at `at`. Returns its id. */
+export function placeToken(presetId: string, at: Point, options: PlaceOptions): Id | null {
+  const preset = getTokenPreset(presetId)
+  return preset ? placeTokenFrom(preset, at, options) : null
+}
+
+/**
+ * Places a token from an uploaded image with the asset's defaults (an unset
+ * kind is 'enemy': a wrong guess then hides a token instead of revealing fog).
+ */
+export function placeUploadedToken(assetId: string, at: Point, options: PlaceOptions): Id | null {
+  const asset = findUpload(getCampaign().library, assetId)
+  if (!asset || asset.kind !== 'token') return null
+  return placeTokenFrom(
+    {
+      assetId,
+      name: asset.name,
+      kind: asset.defaultKind ?? 'enemy',
+      sizeCategory: asset.defaultSize ?? 'medium',
+    },
+    at,
+    options,
+  )
+}
+
 /**
  * Places a prop (default footprint) or a map (native size). `anchor: 'top-left'`
  * puts the item's top-left corner at `at` (snapped to a grid intersection).
@@ -154,7 +183,7 @@ export function placeImage(
   at: Point,
   { snap, anchor = 'center' }: PlaceOptions & { anchor?: 'center' | 'top-left' },
 ): Id | null {
-  const asset = getBuiltinImageAsset(assetId)
+  const asset = placeableImage(getCampaign().library, assetId)
   if (!asset) return null
   const { grid } = currentScene()
   const width = asset.cells ? asset.cells.w * grid.size : asset.width
@@ -415,7 +444,7 @@ export function updateItem(
     (draft) => {
       const scene = sceneOf(draft)
       forEachIn(scene, new Set([id]), (item, layer) => {
-        if (patch.name !== undefined) item.name = patch.name
+        if (patch.name !== undefined) item.name = patch.name.slice(0, MAX_NAME_LENGTH)
         if (patch.opacity !== undefined) item.opacity = Math.min(1, Math.max(0, patch.opacity))
         if (patch.rotation !== undefined) item.rotation = mod(patch.rotation, 360)
         if (patch.hidden !== undefined) item.hidden = patch.hidden

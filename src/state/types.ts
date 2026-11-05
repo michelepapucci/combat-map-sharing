@@ -102,8 +102,10 @@ export interface CampaignState {
   scenes: Scene[]
   activeSceneId: Id
   /**
-   * Per-scene state that must survive undo, keyed by scene id. Created and
-   * deleted together with its scene (in the same action). Never undoable.
+   * Per-scene state that must survive undo, keyed by scene id. Created with its
+   * scene and never undoable. Deleting a scene keeps its memory, so undoing the
+   * delete brings the scene back with its explored fog; validateCampaign drops
+   * memory of scenes that no longer exist when a campaign is loaded.
    */
   sceneMemory: Record<Id, SceneMemory>
   /** Uploaded assets only. Built-in assets live in a code registry (ids prefixed `builtin:`). */
@@ -377,6 +379,8 @@ export interface AssetMeta {
   hash: string
   /** Tokens: default size category when placed. */
   defaultSize: SizeCategory | null
+  /** Tokens: default kind when placed (uploads default to 'enemy', which never reveals fog). */
+  defaultKind: TokenKind | null
   /** Props: default footprint in cells when placed. */
   defaultCells: { w: number; h: number } | null
   /** Too large to sync to a gist even after re-encoding; it stays on this device only. */

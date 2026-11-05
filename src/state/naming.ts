@@ -3,6 +3,8 @@
  * creates "Goblin 1", "Goblin 2", ... and badges derived from names.
  */
 
+import { MAX_NAME_LENGTH } from './validate'
+
 const NUMBERED = /^(.*\S)\s+(\d+)$/
 
 /** "Goblin 3" -> "Goblin"; names without a trailing number are returned trimmed. */
@@ -19,7 +21,9 @@ export function nextNumberedName(name: string, existingNames: Iterable<string>):
     const match = NUMBERED.exec(existing.trim())
     if (match?.[1] === base) highest = Math.max(highest, Number(match[2]))
   }
-  return `${base} ${highest + 1}`
+  const suffix = ` ${highest + 1}`
+  // Stay within the name limit the validator enforces: shorten the base, never the number.
+  return `${base.slice(0, MAX_NAME_LENGTH - suffix.length).trimEnd()}${suffix}`
 }
 
 /** How a token draws its badge: as the center text, or as a small number pip on a glyph or image. */

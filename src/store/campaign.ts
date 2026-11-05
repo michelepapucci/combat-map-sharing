@@ -1,6 +1,6 @@
 import { applyPatches, enablePatches, produce, produceWithPatches, type Draft } from 'immer'
 import { create } from 'zustand'
-import type { CampaignState, Scene } from '../state/types'
+import type { CampaignState, Id, Scene } from '../state/types'
 import { pushEntry, recordedPatches, type HistoryEntry } from './history'
 
 /**
@@ -8,8 +8,8 @@ import { pushEntry, recordedPatches, type HistoryEntry } from './history'
  *
  * Every change to `scenes` or `name` goes through `commit`, which records Immer
  * patches for undo. Other top-level fields change through `setUnrecorded` and are
- * never rolled back (see RECORDED_KEYS). The store starts empty: DmApp loads a
- * campaign on mount (milestone 3: from IndexedDB).
+ * never rolled back (see RECORDED_KEYS). The store starts empty: the DM session
+ * (src/dm/session.ts) loads a campaign from IndexedDB once it holds the DM lock.
  */
 export interface CampaignStore {
   campaign: CampaignState | null
@@ -38,6 +38,30 @@ export function loadCampaign(campaign: CampaignState): void {
   useCampaignStore.setState({ campaign, past: [], future: [] })
 }
 
+/** Unloads the campaign (another tab took over). */
+export function unloadCampaign(): void {
+  useCampaignStore.setState({ campaign: null, past: [], future: [] })
+}
+
+/** Forgets undo history (after an asset deletion removed items it could bring back). */
+export function clearHistory(): void {
+  useCampaignStore.setState({ past: [], future: [] })
+}
+
+/** Makes `preferred` the active scene if it exists; otherwise keeps a valid active scene. */
+function withActiveScene(campaign: CampaignState, preferred: Id): CampaignState {
+  const has = (id: Id) => campaign.scenes.some((scene) => scene.id === id)
+  const target = has(preferred)
+    ? preferred
+    : has(campaign.activeSceneId)
+      ? campaign.activeSceneId
+      : (campaign.scenes[0]?.id ?? campaign.activeSceneId)
+  if (target === campaign.activeSceneId) return campaign
+  return produce(campaign, (draft) => {
+    draft.activeSceneId = target
+  })
+}
+
 function touched(campaign: CampaignState): CampaignState {
   return produce(campaign, (draft) => {
     draft.updatedAt = Date.now()
@@ -64,6 +88,8 @@ export function commit(
     inversePatches: recordedPatches(inversePatches),
     coalesceKey: options.coalesceKey ?? null,
     time: Date.now(),
+    sceneBefore: campaign.activeSceneId,
+    sceneAfter: next.activeSceneId,
   }
   useCampaignStore.setState({
     campaign: touched(next),
@@ -85,7 +111,9 @@ export function undo(): HistoryEntry | null {
   const entry = past.at(-1)
   if (!campaign || !entry) return null
   useCampaignStore.setState({
-    campaign: touched(applyPatches(campaign, entry.inversePatches)),
+    campaign: touched(
+      withActiveScene(applyPatches(campaign, entry.inversePatches), entry.sceneBefore),
+    ),
     past: past.slice(0, -1),
     future: [...future, { ...entry, coalesceKey: null }],
   })
@@ -97,7 +125,7 @@ export function redo(): HistoryEntry | null {
   const entry = future.at(-1)
   if (!campaign || !entry) return null
   useCampaignStore.setState({
-    campaign: touched(applyPatches(campaign, entry.patches)),
+    campaign: touched(withActiveScene(applyPatches(campaign, entry.patches), entry.sceneAfter)),
     past: [...past, entry],
     future: future.slice(0, -1),
   })

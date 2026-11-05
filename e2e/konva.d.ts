@@ -1,0 +1,25 @@
+/**
+ * The slice of Konva's API the e2e tests read in the page. Konva registers
+ * itself as `window.Konva`, which lets tests inspect node positions and sizes.
+ */
+export interface KonvaNode {
+  id: () => string
+  getClassName: () => string
+  x: () => number
+  y: () => number
+  width: () => number
+  height: () => number
+  getClientRect: (config?: { skipStroke?: boolean; relativeTo?: unknown }) => {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+  getLayer: () => unknown
+}
+
+declare global {
+  interface Window {
+    Konva?: { stages: { find: (selector: string) => KonvaNode[]; scaleX: () => number }[] }
+  }
+}

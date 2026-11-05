@@ -1,4 +1,5 @@
 import type { Patch } from 'immer'
+import type { Id } from '../state/types'
 
 /**
  * Undo history (pure). Entries hold Immer patches; consecutive commits with the
@@ -12,6 +13,13 @@ export interface HistoryEntry {
   coalesceKey: string | null
   /** When the entry was last extended (ms). */
   time: number
+  /**
+   * The active scene before and after the change. Undo shows `sceneBefore` and
+   * redo `sceneAfter` (when they still exist), so an undone change is never
+   * invisible and undoing "Delete scene" lands on the restored scene.
+   */
+  sceneBefore: Id
+  sceneAfter: Id
 }
 
 export const HISTORY_LIMIT = 200
@@ -19,7 +27,9 @@ export const COALESCE_WINDOW_MS = 1000
 
 /**
  * Top-level CampaignState keys that undo records. Everything else (sceneMemory,
- * presentation, settings, library, updatedAt) is never rolled back by undo.
+ * presentation, settings, library, activeSceneId, updatedAt) is never rolled
+ * back by undo. A recorded action may change those fields in the same recipe
+ * (a new scene's memory, switching to it): the change applies but is not undone.
  */
 export const RECORDED_KEYS: ReadonlySet<string> = new Set(['scenes', 'name'])
 
@@ -33,13 +43,16 @@ export function pushEntry(past: readonly HistoryEntry[], entry: HistoryEntry): H
   if (
     entry.coalesceKey !== null &&
     last?.coalesceKey === entry.coalesceKey &&
-    entry.time - last.time <= COALESCE_WINDOW_MS
+    entry.time - last.time <= COALESCE_WINDOW_MS &&
+    // Never merge changes made in different scenes (undo shows one scene).
+    entry.sceneBefore === last.sceneAfter
   ) {
     const merged: HistoryEntry = {
       ...last,
       patches: [...last.patches, ...entry.patches],
       inversePatches: [...entry.inversePatches, ...last.inversePatches],
       time: entry.time,
+      sceneAfter: entry.sceneAfter,
     }
     return [...past.slice(0, -1), merged]
   }
