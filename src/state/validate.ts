@@ -45,6 +45,7 @@ import {
   PLAYER_CAMERA_MODES,
   SIZE_CATEGORIES,
   TOKEN_KINDS,
+  UNIT_SYSTEMS,
   type AoeTemplate,
   type AssetMeta,
   type CampaignState,
@@ -744,6 +745,7 @@ const parseAssetMeta: Parser<AssetMeta> = (value, path, ctx) => {
 const parseSettings: Parser<Settings> = (value, path, ctx) => {
   const field = fields(value, path, ctx)
   return {
+    units: field('units', oneOf(UNIT_SYSTEMS)),
     diagonalRule: field('diagonalRule', oneOf(DIAGONAL_RULES)),
     aoeCoverage: field('aoeCoverage', oneOf(AOE_COVERAGE_RULES)),
     snapEnabled: field('snapEnabled', bool),

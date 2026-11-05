@@ -63,8 +63,3 @@ export function worldDistanceFeet(
   const { cells } = segmentCells((to.x - from.x) / gridSize, (to.y - from.y) / gridSize, rule)
   return cells * feetPerCell
 }
-
-/** "15 ft" (euclidean distances are rounded to whole feet). */
-export function formatFeet(feet: number): string {
-  return `${Math.round(feet)} ft`
-}

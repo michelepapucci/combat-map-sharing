@@ -60,6 +60,23 @@ describe('migrateToCurrent', () => {
   })
 })
 
+describe('MIGRATIONS[1]: v1 to v2', () => {
+  it('adds metric units and keeps the other settings', () => {
+    const migrated = migrateToCurrent({
+      version: 1,
+      settings: { diagonalRule: 'five', snapEnabled: false },
+    })
+    expect(migrated).toStrictEqual({
+      version: 2,
+      settings: { diagonalRule: 'five', snapEnabled: false, units: 'metric' },
+    })
+  })
+
+  it('leaves documents without settings for the validator to reject', () => {
+    expect(migrateToCurrent({ version: 1 }, MIGRATIONS, 2)).toStrictEqual({ version: 2 })
+  })
+})
+
 describe('saved campaign fixtures', () => {
   // Every frozen fixture saved by any schema version must migrate to the current sample.
   const fixtures = import.meta.glob<unknown>('./fixtures/campaign.v*.json', {

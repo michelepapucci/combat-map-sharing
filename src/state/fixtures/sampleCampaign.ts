@@ -9,7 +9,7 @@ import type { CampaignState } from '../types'
  * (regenerate it from this file; see CLAUDE.md "Schema changes").
  */
 export const sampleCampaign: CampaignState = {
-  version: 1,
+  version: 2,
   id: 'campaign-1',
   name: 'Test Campaign',
   scenes: [
@@ -229,6 +229,7 @@ export const sampleCampaign: CampaignState = {
     },
   ],
   settings: {
+    units: 'metric',
     diagonalRule: 'alternating',
     aoeCoverage: 'center',
     snapEnabled: true,

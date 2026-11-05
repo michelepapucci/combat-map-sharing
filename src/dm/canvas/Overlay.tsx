@@ -4,7 +4,8 @@ import { Circle, Group, Label, Line, Path, Rect, Tag, Text, Transformer } from '
 import { parseHexColor } from '../../canvas/color'
 import { TokenShape } from '../../canvas/TokenShape'
 import { screenToWorld, worldToScreen } from '../../geometry/camera'
-import { formatFeet, worldDistanceFeet } from '../../geometry/distance'
+import { worldDistanceFeet } from '../../geometry/distance'
+import { formatLength } from '../../geometry/units'
 import { itemBounds } from '../../geometry/rect'
 import { isRightAngle, snapToLine } from '../../geometry/snap'
 import type { Rect as RectShape } from '../../geometry/types'
@@ -121,6 +122,7 @@ function DragTrail({
   showLabel: boolean
 }) {
   const rule = useCampaign((c) => c.settings.diagonalRule)
+  const units = useCampaign((c) => c.settings.units)
   const feet = worldDistanceFeet(token, to, scene.grid.size, scene.grid.feetPerCell, rule)
   return (
     <Group listening={false}>
@@ -153,7 +155,7 @@ function DragTrail({
             pointerHeight={6}
           />
           <Text
-            text={formatFeet(feet)}
+            text={formatLength(feet, units)}
             fontFamily={FONT}
             fontSize={14}
             fontStyle="bold"

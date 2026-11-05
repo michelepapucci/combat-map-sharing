@@ -1,6 +1,6 @@
 import { HardDrive, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { DIAGONAL_RULES, type DiagonalRule } from '../state/types'
+import { DIAGONAL_RULES, UNIT_SYSTEMS, type DiagonalRule, type UnitSystem } from '../state/types'
 import { setUnrecorded, useCampaign } from '../store/campaign'
 import { useSessionStore } from '../store/session'
 import { useUiStore } from '../store/ui'
@@ -8,9 +8,14 @@ import { buttonClass, Field, inputClass } from '../ui/controls'
 import { Dialog } from '../ui/Dialog'
 
 const DIAGONAL_LABELS: Record<DiagonalRule, string> = {
-  five: '5e standard: every square is 5 ft',
-  alternating: 'Alternating 5/10 ft (DMG variant)',
+  five: '5e standard: a diagonal step counts as 1 square',
+  alternating: 'Alternating 1 and 2 squares (DMG variant)',
   euclidean: 'Euclidean (true distance)',
+}
+
+const UNIT_LABELS: Record<UnitSystem, string> = {
+  metric: 'Metric: meters (1 square = 1.5 m)',
+  imperial: 'Imperial: feet (1 square = 5 ft)',
 }
 
 function formatBytes(bytes: number): string {
@@ -115,6 +120,7 @@ function StorageSection() {
 /** Campaign settings and device storage. Gist sync joins in milestone 8. */
 export function SettingsDialog() {
   const diagonalRule = useCampaign((c) => c.settings.diagonalRule)
+  const units = useCampaign((c) => c.settings.units)
   return (
     <Dialog title="Settings" onClose={() => useUiStore.setState({ dialog: null })}>
       <div className="space-y-6">
@@ -122,6 +128,28 @@ export function SettingsDialog() {
           <h3 id="settings-rules" className="text-sm font-medium">
             Rules
           </h3>
+          <Field label="Units of measurement">
+            <select
+              value={units}
+              onChange={(event) => {
+                const value = event.target.value as UnitSystem
+                setUnrecorded((draft) => {
+                  draft.settings.units = value
+                })
+              }}
+              className={inputClass}
+            >
+              {UNIT_SYSTEMS.map((system) => (
+                <option key={system} value={system}>
+                  {UNIT_LABELS[system]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="text-xs text-fg-muted">
+            Distances, vision and templates are shown in these units. Rules are kept in feet and
+            converted at 5 ft = 1.5 m, as in the metric editions of the rulebooks.
+          </p>
           <Field label="Diagonal movement">
             <select
               value={diagonalRule}

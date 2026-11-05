@@ -1,0 +1,302 @@
+{
+  "version": 2,
+  "id": "campaign-1",
+  "name": "Test Campaign",
+  "scenes": [
+    {
+      "id": "scene-1",
+      "name": "Courtyard",
+      "grid": {
+        "type": "square",
+        "size": 70,
+        "offsetX": 12,
+        "offsetY": 4,
+        "feetPerCell": 5,
+        "visible": true,
+        "color": "#000000",
+        "opacity": 0.35
+      },
+      "layers": {
+        "map": [
+          {
+            "id": "map-1",
+            "assetId": "asset-map-1",
+            "name": "Courtyard map",
+            "x": 1400,
+            "y": 1050,
+            "width": 2800,
+            "height": 2100,
+            "rotation": 0,
+            "locked": true,
+            "hidden": false,
+            "opacity": 1
+          }
+        ],
+        "props": [
+          {
+            "id": "prop-1",
+            "assetId": "builtin:prop/chest",
+            "name": "Chest",
+            "x": 245,
+            "y": 315,
+            "width": 70,
+            "height": 70,
+            "rotation": 90,
+            "locked": false,
+            "hidden": true,
+            "opacity": 1
+          }
+        ],
+        "tokens": [
+          {
+            "id": "token-1",
+            "assetId": "builtin:token/circle-blue",
+            "name": "Aria",
+            "x": 455,
+            "y": 525,
+            "width": 70,
+            "height": 70,
+            "rotation": 0,
+            "locked": false,
+            "hidden": false,
+            "opacity": 1,
+            "kind": "player",
+            "sizeCategory": "medium",
+            "visionFt": 60,
+            "label": null,
+            "showLabel": true,
+            "badge": "A",
+            "hp": {
+              "current": 9,
+              "max": 12,
+              "publicBar": true
+            },
+            "conditions": [
+              "prone"
+            ],
+            "color": "#3b82f6",
+            "dmNotes": "",
+            "initiativeModifier": 2
+          },
+          {
+            "id": "token-2",
+            "assetId": "builtin:token/circle-red",
+            "name": "Goblin 1",
+            "x": 980,
+            "y": 700,
+            "width": 70,
+            "height": 70,
+            "rotation": 0,
+            "locked": false,
+            "hidden": false,
+            "opacity": 1,
+            "kind": "enemy",
+            "sizeCategory": "small",
+            "visionFt": null,
+            "label": "Goblin",
+            "showLabel": false,
+            "badge": null,
+            "hp": {
+              "current": 7,
+              "max": 7,
+              "publicBar": false
+            },
+            "conditions": [],
+            "color": "#ef4444",
+            "dmNotes": "Carries the key to the cellar.",
+            "initiativeModifier": 2
+          }
+        ]
+      },
+      "layerState": {
+        "map": {
+          "locked": true,
+          "visible": true
+        },
+        "props": {
+          "locked": false,
+          "visible": true
+        },
+        "tokens": {
+          "locked": false,
+          "visible": true
+        }
+      },
+      "fog": {
+        "enabled": true,
+        "exploredEnabled": true,
+        "manual": [
+          {
+            "id": "fog-1",
+            "mode": "reveal",
+            "shape": {
+              "type": "rect",
+              "x": 0,
+              "y": 0,
+              "width": 280,
+              "height": 210
+            }
+          },
+          {
+            "id": "fog-2",
+            "mode": "hide",
+            "shape": {
+              "type": "polygon",
+              "points": [
+                0,
+                0,
+                70,
+                0,
+                35,
+                70
+              ]
+            }
+          },
+          {
+            "id": "fog-3",
+            "mode": "reveal",
+            "shape": {
+              "type": "brush",
+              "points": [
+                10,
+                10,
+                50,
+                60
+              ],
+              "radius": 20
+            }
+          }
+        ]
+      },
+      "initiative": {
+        "entries": [
+          {
+            "id": "init-1",
+            "tokenId": "token-1",
+            "name": "Aria",
+            "value": 15,
+            "dexTiebreak": 14,
+            "manualOrder": 0,
+            "visibility": "auto"
+          },
+          {
+            "id": "init-2",
+            "tokenId": null,
+            "name": "Lair action",
+            "value": 20,
+            "dexTiebreak": null,
+            "manualOrder": 1,
+            "visibility": "hidden"
+          }
+        ],
+        "activeEntryId": "init-2",
+        "round": 2,
+        "visibleToPlayers": true
+      },
+      "templates": [
+        {
+          "id": "aoe-1",
+          "shape": "cone",
+          "originX": 455,
+          "originY": 525,
+          "sizeFt": 15,
+          "widthFt": 5,
+          "directionDeg": 30,
+          "color": "#f59e0b",
+          "visibleToPlayers": true
+        }
+      ]
+    }
+  ],
+  "activeSceneId": "scene-1",
+  "sceneMemory": {
+    "scene-1": {
+      "explored": {
+        "cellPx": 17.5,
+        "chunks": {
+          "0,0": "AAEC",
+          "-1,2": "gA=="
+        }
+      },
+      "playerView": {
+        "x": 140,
+        "y": 70,
+        "width": 1680,
+        "height": 945
+      }
+    }
+  },
+  "library": [
+    {
+      "id": "asset-map-1",
+      "kind": "map",
+      "name": "Courtyard",
+      "tags": [
+        "outdoor",
+        "ruins"
+      ],
+      "mime": "image/webp",
+      "width": 2800,
+      "height": 2100,
+      "bytes": 1843200,
+      "hash": "9f2c4e0b5d7a1c3e6f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6",
+      "defaultSize": null,
+      "defaultKind": null,
+      "defaultCells": null,
+      "localOnly": false,
+      "createdAt": 1762300000000
+    },
+    {
+      "id": "asset-token-1",
+      "kind": "token",
+      "name": "Aria portrait",
+      "tags": [
+        "pc"
+      ],
+      "mime": "image/png",
+      "width": 512,
+      "height": 512,
+      "bytes": 204800,
+      "hash": "0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "defaultSize": "medium",
+      "defaultKind": "player",
+      "defaultCells": null,
+      "localOnly": false,
+      "createdAt": 1762300100000
+    },
+    {
+      "id": "asset-prop-1",
+      "kind": "prop",
+      "name": "Wagon",
+      "tags": [],
+      "mime": "image/webp",
+      "width": 8192,
+      "height": 4096,
+      "bytes": 7400000,
+      "hash": "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+      "defaultSize": null,
+      "defaultKind": null,
+      "defaultCells": {
+        "w": 2,
+        "h": 1
+      },
+      "localOnly": true,
+      "createdAt": 1762300200000
+    }
+  ],
+  "settings": {
+    "units": "metric",
+    "diagonalRule": "alternating",
+    "aoeCoverage": "center",
+    "snapEnabled": true,
+    "shareRuler": true,
+    "npcVision": false
+  },
+  "presentation": {
+    "cameraMode": "pushed",
+    "blackout": false,
+    "splashAssetId": null
+  },
+  "createdAt": 1762300000000,
+  "updatedAt": 1762300500000
+}

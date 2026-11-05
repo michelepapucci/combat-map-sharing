@@ -60,6 +60,13 @@ export type AssetKind = (typeof ASSET_KINDS)[number]
 export const DIAGONAL_RULES = ['five', 'alternating', 'euclidean'] as const
 export type DiagonalRule = (typeof DIAGONAL_RULES)[number]
 
+/**
+ * How lengths are shown and typed. Rule values are always stored in feet (5e is
+ * written in feet); metric shows them at the game convention 5 ft = 1.5 m.
+ */
+export const UNIT_SYSTEMS = ['metric', 'imperial'] as const
+export type UnitSystem = (typeof UNIT_SYSTEMS)[number]
+
 /** SPEC §5.5. 'center' = a square counts if its center is inside (default); 'half' = if >= 50% covered. */
 export const AOE_COVERAGE_RULES = ['center', 'half'] as const
 export type AoeCoverageRule = (typeof AOE_COVERAGE_RULES)[number]
@@ -118,6 +125,8 @@ export interface CampaignState {
 }
 
 export interface Settings {
+  /** Units shown for distances, vision, templates (v2). Stored values stay in feet. */
+  units: UnitSystem
   diagonalRule: DiagonalRule
   aoeCoverage: AoeCoverageRule
   /** Global magnetic-snap toggle (Alt still disables it per gesture). */

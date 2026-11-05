@@ -18,6 +18,7 @@ import {
 export const DEFAULT_GRID_SIZE = 70
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
+  units: 'metric',
   diagonalRule: 'five',
   aoeCoverage: 'center',
   snapEnabled: true,

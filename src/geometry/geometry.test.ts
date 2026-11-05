@@ -11,7 +11,8 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
 } from './camera'
-import { formatFeet, pathCells, segmentCells, worldDistanceFeet } from './distance'
+import { pathCells, segmentCells, worldDistanceFeet } from './distance'
+import { formatLength, fromDisplayLength, toDisplayLength } from './units'
 import { calibrateFromBox, cellCenter, linesInRange, mod, nearestLine } from './grid'
 import { itemBounds, rectFromPoints, rectsIntersect, unionRects } from './rect'
 import { isRightAngle, rotatedExtent, snapAxis, snapCenter, snapToLine, tokenSpan } from './snap'
@@ -194,7 +195,7 @@ describe('distance', () => {
   it('converts world distances to feet', () => {
     expect(worldDistanceFeet({ x: 35, y: 35 }, { x: 245, y: 105 }, 70, 5, 'five')).toBe(15)
     expect(worldDistanceFeet({ x: 0, y: 0 }, { x: 210, y: 280 }, 70, 5, 'euclidean')).toBe(25)
-    expect(formatFeet(24.6)).toBe('25 ft')
+    expect(formatLength(24.6, 'imperial')).toBe('25 ft')
   })
 })
 
@@ -220,5 +221,24 @@ describe('rectangles', () => {
       width: 70,
       height: 140,
     })
+  })
+})
+
+describe('units', () => {
+  it('shows feet as meters at 5 ft = 1.5 m', () => {
+    expect(formatLength(5, 'metric')).toBe('1.5 m')
+    expect(formatLength(30, 'metric')).toBe('9 m')
+    expect(formatLength(35, 'metric')).toBe('10.5 m')
+    expect(formatLength(60, 'metric')).toBe('18 m')
+    expect(formatLength(0, 'metric')).toBe('0 m')
+    expect(formatLength(7.07, 'metric')).toBe('2.1 m')
+    expect(formatLength(30, 'imperial')).toBe('30 ft')
+  })
+
+  it('converts typed lengths back to feet', () => {
+    expect(fromDisplayLength(1.5, 'metric')).toBeCloseTo(5)
+    expect(fromDisplayLength(9, 'metric')).toBeCloseTo(30)
+    expect(fromDisplayLength(30, 'imperial')).toBe(30)
+    expect(toDisplayLength(fromDisplayLength(4.5, 'metric'), 'metric')).toBe(4.5)
   })
 })

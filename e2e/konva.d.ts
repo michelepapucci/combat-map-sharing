@@ -16,6 +16,8 @@ export interface KonvaNode {
     height: number
   }
   getLayer: () => unknown
+  /** Text nodes only. */
+  text?: () => string
 }
 
 declare global {

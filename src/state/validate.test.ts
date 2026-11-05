@@ -271,13 +271,16 @@ describe('validateCampaign: unknown keys', () => {
 describe('validateCampaign: rejections', () => {
   const cases: { family: string; path: string; value: unknown }[] = [
     // Wrong or missing schema version (validateCampaign runs after migrateToCurrent).
-    { family: 'version', path: 'version', value: 2 },
+    { family: 'version', path: 'version', value: 3 },
+    { family: 'version', path: 'version', value: 1 },
     { family: 'version', path: 'version', value: 0 },
     { family: 'version', path: 'version', value: '1' },
     { family: 'version', path: 'version', value: undefined },
 
     // Enumerations.
     { family: 'enum', path: `${TOKEN}.kind`, value: 'boss' },
+    { family: 'enum', path: 'settings.units', value: 'furlongs' },
+    { family: 'enum', path: 'settings.units', value: undefined },
     { family: 'enum', path: `${TOKEN}.kind`, value: 'Player' },
     { family: 'enum', path: `${TOKEN}.sizeCategory`, value: 'colossal' },
     { family: 'enum', path: 'scenes[0].grid.type', value: 'hex' },

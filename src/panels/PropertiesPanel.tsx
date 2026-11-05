@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Grid3x3, Lock, LockOpen, Trash } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { TOKEN_COLORS } from '../assets/builtin/registry'
+import { fromDisplayLength, toDisplayLength } from '../geometry/units'
 import { findItem } from '../state/sceneOps'
 import { MAX_NAME_LENGTH } from '../state/validate'
 import {
@@ -22,7 +23,7 @@ import {
   updateItem,
 } from '../store/actions'
 import { MOD } from '../dm/shortcuts'
-import { useActiveScene } from '../store/campaign'
+import { useActiveScene, useCampaign } from '../store/campaign'
 import { setTool, useUiStore } from '../store/ui'
 import {
   buttonClass,
@@ -257,6 +258,7 @@ function SingleItem({ item, layer }: { item: Item; layer: LayerName }) {
 
 function GridSettings() {
   const scene = useActiveScene()
+  const units = useCampaign((c) => c.settings.units)
   const { grid } = scene
   return (
     <div className="space-y-3">
@@ -275,13 +277,13 @@ function GridSettings() {
             onCommit={(size) => updateGrid({ size })}
           />
         </Field>
-        <Field label="Feet per cell">
+        <Field label={units === 'metric' ? 'Meters per square' : 'Feet per square'}>
           <CommitNumberInput
-            value={grid.feetPerCell}
-            min={1}
-            max={1000}
-            step={1}
-            onCommit={(feetPerCell) => updateGrid({ feetPerCell })}
+            value={toDisplayLength(grid.feetPerCell, units)}
+            min={units === 'metric' ? 0.3 : 1}
+            max={units === 'metric' ? 300 : 1000}
+            step={units === 'metric' ? 0.5 : 1}
+            onCommit={(length) => updateGrid({ feetPerCell: fromDisplayLength(length, units) })}
           />
         </Field>
         <Field label="Offset X (px)">

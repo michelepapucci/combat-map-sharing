@@ -14,7 +14,7 @@
  *
  * Pure module: no React, no DOM.
  */
-export const CURRENT_SCHEMA_VERSION = 1
+export const CURRENT_SCHEMA_VERSION = 2
 
 export type JsonObject = { [key: string]: unknown }
 
@@ -22,7 +22,13 @@ export type JsonObject = { [key: string]: unknown }
 export type Migration = (doc: JsonObject) => JsonObject
 
 /** MIGRATIONS[n] upgrades a version-n document to version n + 1. */
-export const MIGRATIONS: Readonly<Partial<Record<number, Migration>>> = {}
+export const MIGRATIONS: Readonly<Partial<Record<number, Migration>>> = {
+  /** v2 adds settings.units. Existing campaigns switch to metric (the DM's table uses meters). */
+  1: (doc) => {
+    const settings = doc['settings']
+    return isJsonObject(settings) ? { ...doc, settings: { ...settings, units: 'metric' } } : doc
+  },
+}
 
 export class SchemaVersionError extends Error {
   override name = 'SchemaVersionError'

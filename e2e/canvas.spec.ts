@@ -97,6 +97,16 @@ test('tokens snap while dragging, and undo/redo restores positions', async ({ pa
   // About 2.2 cells right and 0.9 down: magnetic snapping lands on the cell center.
   await page.mouse.move(start.x + 20, start.y + 10, { steps: 3 })
   await page.mouse.move(start.x + 70 * 2.2 * scale, start.y + 70 * 0.9 * scale, { steps: 5 })
+  // The distance label uses the campaign's units: metric by default, 1 square = 1.5 m.
+  const labels = () =>
+    page.evaluate(
+      () =>
+        window.Konva?.stages[0]
+          ?.find('Text')
+          .map((node) => node.text?.() ?? '')
+          .filter((text) => / (m|ft)$/.test(text)) ?? [],
+    )
+  expect(await labels()).toStrictEqual(['3 m'])
   await page.mouse.up()
   expect((await tokens(page))[0]).toMatchObject({ x: 1015, y: 735 })
 
