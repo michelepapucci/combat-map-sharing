@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Camera, Id, Item, LayerName, Token, Tool, UiState } from '../state/types'
+import type { Camera, Id, Item, LayerName, Ping, Token, Tool, UiState } from '../state/types'
 
 /** A copied item with the layer it came from. Plain deep copies, independent of the campaign. */
 export interface ClipboardEntry {
@@ -46,6 +46,8 @@ export interface DmUiState extends UiState {
   dialog: 'campaigns' | 'settings' | null
   /** Library asset shown in the asset dialog. */
   editingAssetId: Id | null
+  /** Pings drawn in the DM window (they are also sent to players). */
+  pings: Ping[]
 }
 
 /** Modal UI that takes the keyboard: canvas shortcuts are off while one is open. */
@@ -78,6 +80,7 @@ export function initialUiState(): DmUiState {
     fitPending: true,
     dialog: null,
     editingAssetId: null,
+    pings: [],
   }
 }
 

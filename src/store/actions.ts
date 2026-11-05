@@ -39,6 +39,7 @@ import {
   undo,
   useCampaignStore,
 } from './campaign'
+import { useSessionStore } from './session'
 import { notify, setSelection, useUiStore, type ClipboardEntry } from './ui'
 
 /**
@@ -545,11 +546,38 @@ export function setSnapEnabled(snapEnabled: boolean): void {
 
 // --- History ----------------------------------------------------------------------
 
+/**
+ * While players watch (a player window is connected and blackout is off),
+ * undo and redo never switch the scene players see: they could reveal a scene
+ * the DM is still preparing. Returns the name of the scene the step would show,
+ * or null if it can run.
+ */
+function sceneSwitchBlocked(target: Id | undefined): string | null {
+  const { campaign } = useCampaignStore.getState()
+  if (!campaign || target === undefined || target === campaign.activeSceneId) return null
+  if (useSessionStore.getState().players === 0 || campaign.presentation.blackout) return null
+  return campaign.scenes.find((scene) => scene.id === target)?.name ?? 'the scene you deleted'
+}
+
+function explainBlocked(verb: 'Undo' | 'Redo', scene: string): void {
+  notify(`${verb} would show players “${scene}”. Switch to that scene first, or turn on blackout.`)
+}
+
 export function undoAction(): void {
+  const blocked = sceneSwitchBlocked(useCampaignStore.getState().past.at(-1)?.sceneBefore)
+  if (blocked !== null) {
+    explainBlocked('Undo', blocked)
+    return
+  }
   if (undo()) pruneSelection()
 }
 
 export function redoAction(): void {
+  const blocked = sceneSwitchBlocked(useCampaignStore.getState().future.at(-1)?.sceneAfter)
+  if (blocked !== null) {
+    explainBlocked('Redo', blocked)
+    return
+  }
   if (redo()) pruneSelection()
 }
 

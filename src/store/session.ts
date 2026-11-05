@@ -31,6 +31,8 @@ export interface SessionState {
   campaigns: CampaignSummary[]
   /** navigator.storage.persist() result; null until asked. */
   persisted: boolean | null
+  /** Player windows connected to this DM tab. */
+  players: number
 }
 
 export const useSessionStore = create<SessionState>()(() => ({
@@ -42,4 +44,5 @@ export const useSessionStore = create<SessionState>()(() => ({
   storageUnavailable: false,
   campaigns: [],
   persisted: null,
+  players: 0,
 }))

@@ -51,8 +51,10 @@ test('"Open player window" opens #/player in a new window', async ({ page, conte
   await page.getByRole('button', { name: 'Open player window' }).click()
   const popup = await popupPromise
   await expect(popup).toHaveURL(/#\/player$/)
-  await expect(popup.getByText('Connecting to the DM window…')).toBeVisible()
   await expect(popup).toHaveTitle('Player view')
+  // The DM window is open, so the player connects at once.
+  await expect(page.getByText('1 window connected')).toBeVisible()
+  await expect(popup.getByText('Connecting to the DM window…')).toBeHidden()
   expect(errors).toStrictEqual([])
 })
 

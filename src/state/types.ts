@@ -448,6 +448,8 @@ export interface PlayerGrid {
   size: number
   offsetX: number
   offsetY: number
+  /** Turns template sizes (feet) into world px in the player window. Not secret. */
+  feetPerCell: number
   visible: boolean
   color: string
   opacity: number
@@ -511,6 +513,8 @@ export interface PlayerRuler {
   points: { x: number; y: number }[]
   feet: number
   cells: number
+  /** How to show `feet` (geometry/units formatLength). */
+  units: UnitSystem
 }
 
 export interface PlayerInitiative {

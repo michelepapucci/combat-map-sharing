@@ -19,7 +19,7 @@ const TOOL_BUTTONS: readonly ToolButton[] = [
   { tool: 'measure', label: 'Measure', shortcut: 'M', Icon: Ruler, comingIn: 7 },
   { tool: 'aoe', label: 'Area of effect', shortcut: 'A', Icon: CircleDashed, comingIn: 7 },
   { tool: 'fog', label: 'Fog', shortcut: 'F', Icon: CloudFog, comingIn: 5 },
-  { tool: 'ping', label: 'Ping', shortcut: 'P', Icon: Radar, comingIn: 4 },
+  { tool: 'ping', label: 'Ping (or Alt+click)', shortcut: 'P', Icon: Radar, comingIn: null },
   {
     tool: 'calibrate',
     label: 'Calibrate grid to the map',

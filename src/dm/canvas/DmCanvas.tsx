@@ -3,6 +3,7 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Group, Layer, Stage } from 'react-konva'
 import { GridShape } from '../../canvas/GridShape'
+import { useDevicePixelRatio } from '../../canvas/useDevicePixelRatio'
 import {
   fitRect,
   panBy,
@@ -26,6 +27,7 @@ import {
 import { getCampaign, useActiveScene } from '../../store/campaign'
 import { notify, setSelection, setTool, useUiStore } from '../../store/ui'
 import { LIBRARY_MIME, parseLibraryEntry, placeLibraryEntry } from '../placement'
+import { ping } from '../presentation'
 import { importAndPlace } from '../uploads'
 import { CanvasHud } from './CanvasHud'
 import { Overlay } from './Overlay'
@@ -126,6 +128,7 @@ export function DmCanvas() {
   const dragging = useUiStore((s) => s.liveDrag !== null)
   const hoveredId = useUiStore((s) => s.hoveredId)
   const fitPending = useUiStore((s) => s.fitPending)
+  const dpr = useDevicePixelRatio()
 
   // A newly opened campaign or scene (without a remembered view) is fitted once the size is known.
   useEffect(() => {
@@ -224,6 +227,8 @@ export function DmCanvas() {
         case 'drag':
           if (gesture.moved && liveDrag) {
             moveItems(liveDrag)
+          } else if (event.altKey) {
+            ping(world) // Alt+click pings, even on an item (Alt+drag still moves it freely)
           } else if (gesture.selectOnlyOnClick) {
             setSelection([gesture.primaryId])
           }
@@ -232,7 +237,8 @@ export function DmCanvas() {
         case 'marquee': {
           setMarquee(null)
           if (!gesture.moved) {
-            if (!gesture.additive) setSelection([])
+            if (event.altKey) ping(world)
+            else if (!gesture.additive) setSelection([])
             break
           }
           const rect = rectFromPoints(gesture.startWorld, world)
@@ -340,6 +346,11 @@ export function DmCanvas() {
     }
     if (event.button !== 0 || isTransformerPart(e.target)) return
 
+    // The Ping tool, and Alt+click with any other tool than Select (whose Alt+drag moves freely).
+    if (currentTool === 'ping' || (event.altKey && currentTool !== 'select')) {
+      ping(world)
+      return
+    }
     if (currentTool === 'calibrate') {
       gestureRef.current = {
         kind: 'calibrate',
@@ -353,6 +364,14 @@ export function DmCanvas() {
     if (currentTool !== 'select') return
 
     const id = itemIdOf(e.target)
+    // Alt+click on something that cannot move (locked item or layer) pings without selecting it.
+    if (event.altKey && id !== null) {
+      const target = findItem(currentScene(), id)
+      if (!target || !isItemMovable(currentScene(), target)) {
+        ping(world)
+        return
+      }
+    }
     if (id === null) {
       gestureRef.current = {
         kind: 'marquee',
@@ -461,7 +480,7 @@ export function DmCanvas() {
       ? 'grabbing'
       : spaceHeld
         ? 'grab'
-        : tool === 'calibrate'
+        : tool === 'calibrate' || tool === 'ping'
           ? 'crosshair'
           : hoveredMovable
             ? 'move'
@@ -486,6 +505,7 @@ export function DmCanvas() {
     >
       {viewport.width > 0 && viewport.height > 0 && (
         <Stage
+          key={dpr}
           ref={stageRef}
           width={viewport.width}
           height={viewport.height}

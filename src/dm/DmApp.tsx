@@ -1,5 +1,6 @@
 import {
   ChevronDown,
+  EyeOff,
   Keyboard,
   MonitorUp,
   Moon,
@@ -14,6 +15,7 @@ import { useTheme } from '../app/theme'
 import { AssetDialog } from '../panels/AssetDialog'
 import { LayersPanel } from '../panels/LayersPanel'
 import { LibraryPanel } from '../panels/LibraryPanel'
+import { PlayerViewPanel } from '../panels/PlayerViewPanel'
 import { PropertiesPanel } from '../panels/PropertiesPanel'
 import { openPlayerWindow } from '../player/openPlayerWindow'
 import { pruneSelection, redoAction, undoAction } from '../store/actions'
@@ -27,6 +29,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { ContextMenu } from './ContextMenu'
 import { SaveIndicator } from './SaveIndicator'
 import { SceneBar } from './SceneBar'
+import { setBlackout } from './presentation'
 import { startSession } from './session'
 import { InactiveScreen, LoadFailedScreen, StartingScreen } from './SessionScreens'
 import { SettingsDialog } from './SettingsDialog'
@@ -75,6 +78,23 @@ function CampaignButton() {
   )
 }
 
+/** A loud reminder in the header while players see a black screen. */
+function BlackoutBadge() {
+  const blackout = useCampaign((c) => c.presentation.blackout)
+  if (!blackout) return null
+  return (
+    <button
+      type="button"
+      onClick={() => setBlackout(false)}
+      title="Players see a black screen. Click to lift the blackout."
+      className="flex items-center gap-1.5 rounded-full border border-danger px-2.5 py-0.5 text-xs font-medium text-danger hover:bg-danger/10"
+    >
+      <EyeOff aria-hidden className="size-3.5" />
+      Blackout on
+    </button>
+  )
+}
+
 function Dialogs() {
   const dialog = useUiStore((s) => s.dialog)
   return (
@@ -108,6 +128,7 @@ function Workspace() {
         <CampaignButton />
         <HistoryButtons />
         <SaveIndicator />
+        <BlackoutBadge />
         <div className="ml-auto flex items-center gap-2">
           <IconButton
             icon={Keyboard}
@@ -149,6 +170,7 @@ function Workspace() {
           aria-label="Library and properties"
           className="flex min-h-0 flex-col gap-5 overflow-y-auto border-l border-border bg-surface p-3"
         >
+          <PlayerViewPanel />
           <LibraryPanel />
           <LayersPanel />
           <PropertiesPanel />

@@ -1,3 +1,4 @@
+import { DM_LOCK } from '../sync/protocol'
 import { createAutosaver, type Autosaver, type SaveStatus } from '../persistence/autosave'
 import {
   collectAssetGarbage,
@@ -21,9 +22,11 @@ import {
   unloadCampaign,
   useCampaignStore,
 } from '../store/campaign'
+import { loadDevicePrefs } from '../store/devicePrefs'
 import { useSessionStore, type SessionState } from '../store/session'
 import { notify, notifySticky, resetUiForCampaign, sceneSwitched } from '../store/ui'
 import { pendingUploads } from './pendingUploads'
+import { startPresentation, stopPresentation } from './presentation'
 
 /**
  * The DM session: one editing window, autosave, and local campaigns (SPEC §6).
@@ -43,7 +46,7 @@ import { pendingUploads } from './pendingUploads'
  * Started once per page by DmApp; it lives as long as the page.
  */
 
-const LOCK_NAME = 'vtt:dm'
+const LOCK_NAME = DM_LOCK
 const CHANNEL_NAME = 'vtt-dm'
 const TAKEOVER_TIMEOUT_MS = 3000
 const RELOAD_GRACE_MS = 1000
@@ -181,9 +184,19 @@ async function readValidCampaign(id: string): Promise<CampaignState> {
   return validateCampaign(migrateToCurrent(raw)).campaign
 }
 
-/** Shows a campaign and starts saving it, unless this tab lost the lock since `at`. */
+/**
+ * Shows a campaign and starts saving it, unless this tab lost the lock since `at`.
+ * Replacing one campaign with another while a player window is connected turns
+ * blackout on first, so players never see a campaign the DM has not shown yet.
+ */
 function showCampaign(campaign: CampaignState, at: number): boolean {
   if (!current(at)) return false
+  const replacing = useCampaignStore.getState().campaign !== null
+  const players = useSessionStore.getState().players > 0
+  if (replacing && players && !campaign.presentation.blackout) {
+    campaign = { ...campaign, presentation: { ...campaign.presentation, blackout: true } }
+    notify('Blackout is on while you change campaign. Lift it when players should see it.')
+  }
   loadCampaign(campaign)
   resetUiForCampaign()
   startAutosave()
@@ -341,6 +354,7 @@ function stepAside(): void {
   holding = false
   epoch += 1
   releaseLock = null
+  stopPresentation()
   stopAutosave()
   unloadCampaign()
   setSession({ phase: 'inactive', inactiveReason: 'taken-over' })
@@ -420,6 +434,8 @@ async function claim(stealing: boolean): Promise<void> {
       setSession({ phase: 'inactive', inactiveReason: 'open-elsewhere' })
       return
     }
+    // Player windows follow whichever tab holds the DM lock.
+    startPresentation()
     await openInitialCampaign(epoch)
   } catch (error) {
     unloadCampaign()
@@ -445,6 +461,7 @@ function onChannelMessage(event: MessageEvent<unknown>): void {
 export function startSession(): void {
   if (started) return
   started = true
+  loadDevicePrefs()
   if ('BroadcastChannel' in window) {
     channel = new BroadcastChannel(CHANNEL_NAME)
     channel.addEventListener('message', onChannelMessage)

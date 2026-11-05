@@ -46,8 +46,12 @@ export const SHORTCUT_GROUPS: readonly {
     rows: [
       { keys: ['V'], action: 'Select' },
       {
-        keys: ['M', 'A', 'F', 'P'],
-        action: 'Measure, area of effect, fog, ping (later milestones)',
+        keys: ['P'],
+        action: 'Ping: click to show players a point (Alt+click works with any tool)',
+      },
+      {
+        keys: ['M', 'A', 'F'],
+        action: 'Measure, area of effect, fog (later milestones)',
       },
       { keys: ['?'], action: 'This cheat sheet' },
     ],
@@ -152,6 +156,9 @@ export function handleShortcut(event: KeyboardEvent): boolean {
       return selection.length > 0
     case 'v':
       setTool('select')
+      return true
+    case 'p':
+      setTool('ping')
       return true
     case '?':
       useUiStore.setState({ shortcutsOpen: true, contextMenu: null })

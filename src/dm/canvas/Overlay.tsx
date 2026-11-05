@@ -2,6 +2,7 @@ import type Konva from 'konva'
 import { useLayoutEffect, useRef } from 'react'
 import { Circle, Group, Label, Line, Path, Rect, Tag, Text, Transformer } from 'react-konva'
 import { parseHexColor } from '../../canvas/color'
+import { PingRipple } from '../../canvas/PingRipple'
 import { TokenShape } from '../../canvas/TokenShape'
 import { screenToWorld, worldToScreen } from '../../geometry/camera'
 import { worldDistanceFeet } from '../../geometry/distance'
@@ -232,6 +233,7 @@ export function Overlay({ marquee, calibration }: OverlayProps) {
   const primaryId = useUiStore((s) => s.dragPrimaryId)
   const tool = useUiStore((s) => s.tool)
   const calibrationCells = useUiStore((s) => s.calibrationCells)
+  const pings = useUiStore((s) => s.pings)
   const snapEnabled = useCampaign((c) => c.settings.snapEnabled)
   const accent = useCssColor('--accent', '#e3a83b')
   const transformerRef = useRef<Konva.Transformer>(null)
@@ -378,6 +380,9 @@ export function Overlay({ marquee, calibration }: OverlayProps) {
       {calibration && (
         <CalibrationBox box={calibration} cells={calibrationCells} color={accent} zoom={zoom} />
       )}
+      {pings.map((ping) => (
+        <PingRipple key={ping.id} x={ping.x} y={ping.y} startedAt={ping.createdAt} scale={zoom} />
+      ))}
     </>
   )
 }

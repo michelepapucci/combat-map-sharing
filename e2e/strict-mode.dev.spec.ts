@@ -80,3 +80,25 @@ test('dialogs open, stay open, and leave the page usable after closing', async (
   await expect(page.getByRole('dialog', { name: 'Keyboard and mouse' })).toBeVisible()
   expect(errors).toStrictEqual([])
 })
+
+test('the player window connects, renders and follows changes under StrictMode', async ({
+  page,
+}) => {
+  const errors = trackErrors(page)
+  await page.goto('./#/dm')
+  await page.getByRole('button', { name: 'Grass' }).click()
+  await page.getByRole('tabpanel').getByRole('button', { name: /^Wolf/ }).click()
+  const popup = page.waitForEvent('popup')
+  await page.getByRole('button', { name: 'Open player window' }).click()
+  const player = await popup
+  const playerErrors = trackErrors(player)
+  await expect(page.getByText('1 window connected')).toBeVisible()
+  const count = () => player.evaluate(() => window.Konva?.stages[0]?.find('.item').length ?? 0)
+  await expect.poll(count).toBe(2)
+  await page.keyboard.press('h') // hide the selected wolf
+  await expect.poll(count).toBe(1)
+  await page.close()
+  await expect(player.getByText('DM window disconnected')).toBeVisible()
+  expect(errors).toStrictEqual([])
+  expect(playerErrors).toStrictEqual([])
+})
