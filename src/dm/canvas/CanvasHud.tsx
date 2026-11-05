@@ -9,8 +9,9 @@ import { setTool, useUiStore } from '../../store/ui'
 import { setSceneFog, type FogBrushShape } from '../../store/fogActions'
 import { placeLibraryEntry } from '../placement'
 import { PreviewInitiative } from './FogViews'
+import { AoeToolbar, MeasureToolbar } from './ToolOptions'
 import { importAndPlace } from '../uploads'
-import { buttonClass, CommitNumberInput } from '../../ui/controls'
+import { buttonClass, CommitNumberInput, Segmented } from '../../ui/controls'
 
 const hudButton =
   'flex size-8 items-center justify-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg'
@@ -119,38 +120,6 @@ function CalibrationBanner() {
         </button>
       </div>
       <p className="text-xs text-fg-muted">A box over more cells gives a more accurate grid.</p>
-    </div>
-  )
-}
-
-const segment =
-  'rounded-md px-2 py-0.5 text-sm text-fg-muted aria-checked:bg-surface-3 aria-checked:text-fg hover:text-fg'
-
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string
-  value: T
-  options: readonly { value: T; label: string }[]
-  onChange: (value: T) => void
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex rounded-lg bg-surface-2 p-0.5">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={value === option.value}
-          onClick={() => onChange(option.value)}
-          className={segment}
-        >
-          {option.label}
-        </button>
-      ))}
     </div>
   )
 }
@@ -387,6 +356,8 @@ export function CanvasHud() {
           {empty && tool === 'select' && <EmptyState />}
           {tool === 'calibrate' && <CalibrationBanner />}
           {tool === 'fog' && <FogToolbar />}
+          {tool === 'measure' && <MeasureToolbar />}
+          {tool === 'aoe' && <AoeToolbar />}
         </>
       )}
       <ZoomControls />

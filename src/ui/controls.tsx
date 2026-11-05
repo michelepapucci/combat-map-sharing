@@ -295,3 +295,36 @@ export function SubsectionHeading({ id, children }: { id: string; children: Reac
     </h3>
   )
 }
+
+const segment =
+  'rounded-md px-2 py-0.5 text-sm text-fg-muted aria-checked:bg-surface-3 aria-checked:text-fg hover:text-fg'
+
+/** A row of mutually exclusive options (radio buttons styled as a segmented control). */
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: readonly { value: T; label: string }[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex rounded-lg bg-surface-2 p-0.5">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          onClick={() => onChange(option.value)}
+          className={segment}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}

@@ -5,6 +5,7 @@ import { createCampaign } from '../state/defaults'
 import { migrateToCurrent } from '../state/migrations'
 import { allItems } from '../state/sceneOps'
 import {
+  AOE_SHAPES,
   SIZE_CATEGORIES,
   TOKEN_KINDS,
   type AssetMeta,
@@ -50,6 +51,13 @@ import {
   toggleEntryVisibility,
   updateEntry,
 } from './initiativeActions'
+import {
+  deleteTemplates,
+  moveTemplates,
+  pinTemplate,
+  toggleTemplatesVisible,
+  updateTemplate,
+} from './templateActions'
 import { addAssets, removeAsset, updateAsset } from './libraryActions'
 import {
   addScene,
@@ -75,6 +83,10 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+function templateIds(): Id[] {
+  return currentScene().templates.map((template) => template.id)
 }
 
 function entryIds(): Id[] {
@@ -214,8 +226,47 @@ function run(seed: number, steps: number, focus: 'all' | 'fog'): void {
       if (r() < 0.2) endCombat()
     },
   ]
+  // Area-of-effect templates (milestone 7).
+  const templateActions: (() => void)[] = [
+    () => {
+      const origin = point()
+      useUiStore.setState({
+        tempTemplate: {
+          id: `t-${Math.floor(num(0, 1e9))}`,
+          shape: pick(AOE_SHAPES),
+          originX: origin.x,
+          originY: origin.y,
+          sizeFt: pick([0, 5, 17, num(-50, 5000), Number.NaN]),
+          widthFt: pick([5, 0, num(-5, 200)]),
+          directionDeg: pick([0, 45, num(-1000, 1000), Number.POSITIVE_INFINITY]),
+          color: pick(['#f59e0b', 'not a color', '#ABCDEF']),
+          visibleToPlayers: r() < 0.7,
+        },
+      })
+      pinTemplate()
+    },
+    () => {
+      const ids = templateIds()
+      if (ids.length === 0) return
+      updateTemplate(pick(ids), {
+        shape: pick(AOE_SHAPES),
+        sizeFt: pick([5, 33, num(-50, 5000), Number.NaN]),
+        widthFt: pick([5, 0, num(-5, 200)]),
+        directionDeg: pick([90, num(-1000, 1000), Number.NaN]),
+        color: pick(['#22c55e', 'nope', '#fff']),
+        visibleToPlayers: r() < 0.5,
+      })
+    },
+    () => {
+      const ids = templateIds().filter(() => r() < 0.5)
+      moveTemplates(Object.fromEntries(ids.map((id) => [id, point()])))
+    },
+    () => toggleTemplatesVisible(templateIds().filter(() => r() < 0.5)),
+    () => deleteTemplates(templateIds().filter(() => r() < 0.3)),
+  ]
   const base: (() => void)[] = [
     ...initiativeActions,
+    ...templateActions,
     () => placeToken(pick(TOKEN_PRESETS).id, point(), { snap: r() < 0.5 }),
     () => placeImage(pick(PROP_ASSETS).id, point(), { snap: r() < 0.5 }),
     () => placeImage(pick(MAP_ASSETS).id, point(), { snap: r() < 0.5, anchor: 'top-left' }),

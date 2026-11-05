@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Point } from '../geometry/types'
 import type {
+  AoeShape,
   Camera,
   FogEditMode,
   FogShape,
@@ -67,6 +68,20 @@ export interface DmUiState extends UiState {
   fogBrushCells: number
   /** The fog shape being drawn (shown in the overlay); null when idle. */
   fogDraft: FogDraft | null
+  /**
+   * The ruler's state: 'drag' while the button is held, 'waypoint' while its end
+   * follows the pointer after Shift added a waypoint, null when idle or finished
+   * (a finished ruler stays on screen until Esc, a new one or another tool).
+   */
+  measuring: 'drag' | 'waypoint' | null
+  /** Area-of-effect tool options (kept for the session). */
+  aoeShape: AoeShape
+  aoeColor: string
+  /** Line width in feet. */
+  aoeLineWidthFt: number
+  /** Size of the last template placed: a click (no drag) places one this size. */
+  aoeLastSizeFt: number
+  aoeVisibleToPlayers: boolean
 }
 
 /** A manual fog shape in progress, in world px. `cursor` is the live end of a polygon. */
@@ -110,15 +125,33 @@ export function initialUiState(): DmUiState {
     fogShape: 'rect',
     fogBrushCells: 1,
     fogDraft: null,
+    measuring: null,
+    aoeShape: 'circle',
+    aoeColor: '#f59e0b',
+    aoeLineWidthFt: 5,
+    aoeLastSizeFt: 20,
+    aoeVisibleToPlayers: true,
   }
 }
 
 export const useUiStore = create<DmUiState>()(() => initialUiState())
 
 export function setTool(tool: Tool): void {
-  // A half-drawn fog shape belongs to the fog tool (pressing F again keeps it).
+  // A half-drawn fog shape, a ruler and an unpinned template belong to their tool
+  // (pressing its key again keeps them); changing tools drops them (SPEC §5.5).
   const same = useUiStore.getState().tool === tool
-  useUiStore.setState(same ? { contextMenu: null } : { tool, contextMenu: null, fogDraft: null })
+  useUiStore.setState(
+    same
+      ? { contextMenu: null }
+      : {
+          tool,
+          contextMenu: null,
+          fogDraft: null,
+          measurement: null,
+          measuring: null,
+          tempTemplate: null,
+        },
+  )
 }
 
 export function setSelection(selection: Id[]): void {
@@ -160,6 +193,7 @@ export function sceneSwitched(from: Id, to: Id): void {
     liveDrag: null,
     pasteCount: 0,
     measurement: null,
+    measuring: null,
     tempTemplate: null,
     fogDraft: null,
     tool: ui.tool === 'calibrate' ? 'select' : ui.tool,
@@ -177,6 +211,11 @@ export function resetUiForCampaign(): void {
     fogMode,
     fogShape,
     fogBrushCells,
+    aoeShape,
+    aoeColor,
+    aoeLineWidthFt,
+    aoeLastSizeFt,
+    aoeVisibleToPlayers,
   } = useUiStore.getState()
   useUiStore.setState({
     ...initialUiState(),
@@ -185,6 +224,11 @@ export function resetUiForCampaign(): void {
     fogMode,
     fogShape,
     fogBrushCells,
+    aoeShape,
+    aoeColor,
+    aoeLineWidthFt,
+    aoeLastSizeFt,
+    aoeVisibleToPlayers,
     dmViewport,
     notice,
     importProgress,

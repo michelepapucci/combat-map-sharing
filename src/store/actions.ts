@@ -86,6 +86,8 @@ export function pruneSelection(): void {
   if (!campaign) return
   const scene = activeSceneOf(campaign)
   const keep = selection.filter((id) => {
+    // Pinned templates are selectable too (they live outside the layers).
+    if (scene.templates.some((template) => template.id === id)) return true
     const ref = findItem(scene, id)
     return ref !== null && isLayerInteractive(scene, ref.layer)
   })

@@ -13,12 +13,15 @@ import {
   wheelZoomFactor,
   zoomAt,
 } from '../../geometry/camera'
+import { snapTemplateOrigin, templateFromDrag, type AoeGrid } from '../../geometry/aoe'
 import { nearestLine } from '../../geometry/grid'
+import { snapRulerPoint } from '../../geometry/ruler'
 import { itemBounds, rectFromPoints, rectsIntersect } from '../../geometry/rect'
 import { rotatedExtent, SNAP_THRESHOLD, snapCenter, tokenSpan } from '../../geometry/snap'
 import type { Point, Rect, Size } from '../../geometry/types'
 import { allItems, findItem, isItemMovable, isLayerInteractive } from '../../state/sceneOps'
-import type { Id, Token } from '../../state/types'
+import { newId } from '../../state/ids'
+import type { AoeShape, AoeTemplate, Id, Token } from '../../state/types'
 import {
   calibrateGrid,
   contentBounds,
@@ -28,11 +31,18 @@ import {
 } from '../../store/actions'
 import { getCampaign, useActiveScene } from '../../store/campaign'
 import { addFogEdit, flatPoints } from '../../store/fogActions'
+import {
+  cleanTemplateFeet,
+  findTemplate,
+  moveTemplates,
+  selectedTemplateIds,
+} from '../../store/templateActions'
 import { notify, setSelection, setTool, useUiStore } from '../../store/ui'
 import { LIBRARY_MIME, parseLibraryEntry, placeLibraryEntry } from '../placement'
 import { closeFogPolygon } from '../fogTool'
 import { ping } from '../presentation'
 import { importAndPlace } from '../uploads'
+import { Annotations } from './Annotations'
 import { CanvasHud } from './CanvasHud'
 import { DmFogTint, PlayersPreview } from './FogViews'
 import { Overlay } from './Overlay'
@@ -83,11 +93,96 @@ type Gesture =
       sceneId: Id
     }
   | { kind: 'fogBrush'; pointerId: number; radius: number; points: Point[]; sceneId: Id }
+  | {
+      kind: 'measure'
+      pointerId: number
+      startScreen: Point
+      /** The new ruler's first point (unused when continuing one). */
+      start: Point
+      moved: boolean
+      /** The press continued a ruler whose end was following the pointer (after a waypoint). */
+      continued: boolean
+      alt: boolean
+    }
+  | {
+      kind: 'aoePlace'
+      pointerId: number
+      startScreen: Point
+      origin: Point
+      /** Nothing is placed (nor sent to players) until the pointer moves. */
+      moved: boolean
+      alt: boolean
+    }
+  | {
+      kind: 'templateDrag'
+      pointerId: number
+      startScreen: Point
+      startWorld: Point
+      primaryId: Id
+      origins: Record<Id, Point>
+      moved: boolean
+    }
 
 /** The id of the scene item a Konva event hit, if any. */
 function itemIdOf(target: Konva.Node): Id | null {
   const node = target.hasName('item') ? target : target.findAncestor('.item')
   return node ? node.id() : null
+}
+
+/** The id of the pinned template whose outline or origin handle a Konva event hit, if any. */
+function templateIdOf(target: Konva.Node): Id | null {
+  return target.hasName('template') ? target.id() : null
+}
+
+/** The scene's grid as the template geometry wants it. */
+function aoeGrid(): AoeGrid {
+  const { size, offsetX, offsetY, feetPerCell } = currentScene().grid
+  return { size, offsetX, offsetY, feetPerCell }
+}
+
+/** A ruler point: the cell center under the pointer, or the pointer itself (Alt, or snapping off). */
+function rulerPoint(world: Point, free: boolean): Point {
+  return free || !getCampaign().settings.snapEnabled
+    ? world
+    : snapRulerPoint(world, currentScene().grid)
+}
+
+/** Replaces the ruler's live end. */
+function setRulerEnd(point: Point): void {
+  const { measurement } = useUiStore.getState()
+  if (!measurement || measurement.points.length === 0) return
+  useUiStore.setState({ measurement: { points: [...measurement.points.slice(0, -1), point] } })
+}
+
+/** A new template of the tool's options at `origin`, the size of the last one placed. */
+function newTempTemplate(origin: Point, direction: number | undefined): AoeTemplate {
+  const ui = useUiStore.getState()
+  const directionDeg = direction ?? (ui.aoeShape === 'cube' ? 45 : 0)
+  return {
+    id: newId(),
+    shape: ui.aoeShape,
+    originX: origin.x,
+    originY: origin.y,
+    sizeFt: ui.aoeLastSizeFt,
+    widthFt: ui.aoeLineWidthFt,
+    directionDeg:
+      ui.aoeShape === 'cube'
+        ? (Math.round((directionDeg - 45) / 90) * 90 + 45 + 360) % 360
+        : directionDeg,
+    color: ui.aoeColor,
+    visibleToPlayers: ui.aoeVisibleToPlayers,
+  }
+}
+
+/** Direction snapping while dragging out a template (cubes stay axis-aligned unless Alt). */
+function templateSnap(
+  shape: AoeShape,
+  event: PointerEvent,
+): { snapDegrees: number | null; snapOffsetDeg?: number } {
+  if (shape === 'cube')
+    return event.altKey ? { snapDegrees: null } : { snapDegrees: 90, snapOffsetDeg: 45 }
+  if (shape === 'cone' || shape === 'line') return { snapDegrees: event.shiftKey ? 15 : null }
+  return { snapDegrees: null }
 }
 
 function isTransformerPart(target: Konva.Node): boolean {
@@ -239,6 +334,70 @@ export function DmCanvas() {
           })
           break
         }
+        case 'measure': {
+          const end = rulerPoint(world, event.altKey)
+          if (!gesture.moved) {
+            if (distance(point, gesture.startScreen) < DRAG_THRESHOLD) {
+              if (gesture.continued) setRulerEnd(end)
+              return
+            }
+            gesture.moved = true
+            // A new ruler appears (and reaches players) only once the drag starts.
+            if (!gesture.continued) {
+              useUiStore.setState({
+                measurement: { points: [gesture.start, end] },
+                measuring: 'drag',
+              })
+            }
+          }
+          setRulerEnd(end)
+          break
+        }
+        case 'aoePlace': {
+          if (!gesture.moved && distance(point, gesture.startScreen) < DRAG_THRESHOLD) return
+          const ui = useUiStore.getState()
+          // The first move replaces any unpinned template with a new one.
+          const temp: AoeTemplate =
+            gesture.moved && ui.tempTemplate
+              ? ui.tempTemplate
+              : newTempTemplate(gesture.origin, ui.tempTemplate?.directionDeg)
+          gesture.moved = true
+          const { sizeFt, directionDeg } = templateFromDrag(
+            temp.shape,
+            gesture.origin,
+            world,
+            aoeGrid(),
+            {
+              ...templateSnap(temp.shape, event),
+              fallbackDirectionDeg: temp.directionDeg,
+            },
+          )
+          useUiStore.setState({
+            tempTemplate: { ...temp, sizeFt: cleanTemplateFeet(sizeFt), directionDeg },
+          })
+          break
+        }
+        case 'templateDrag': {
+          if (!gesture.moved && distance(point, gesture.startScreen) < DRAG_THRESHOLD) return
+          gesture.moved = true
+          const primary = gesture.origins[gesture.primaryId]
+          const template = findTemplate(currentScene(), gesture.primaryId)
+          if (!primary || !template) return
+          let target = {
+            x: primary.x + world.x - gesture.startWorld.x,
+            y: primary.y + world.y - gesture.startWorld.y,
+          }
+          if (getCampaign().settings.snapEnabled && !event.altKey) {
+            target = snapTemplateOrigin(template.shape, target, aoeGrid())
+          }
+          const dx = target.x - primary.x
+          const dy = target.y - primary.y
+          const liveDrag: Record<Id, Point> = {}
+          for (const [id, o] of Object.entries(gesture.origins))
+            liveDrag[id] = { x: o.x + dx, y: o.y + dy }
+          useUiStore.setState({ liveDrag })
+          break
+        }
         case 'marquee':
         case 'calibrate': {
           if (!gesture.moved && distance(point, gesture.startScreen) < DRAG_THRESHOLD) return
@@ -277,6 +436,52 @@ export function DmCanvas() {
           }
           useUiStore.setState({ liveDrag: null, dragPrimaryId: null })
           break
+        case 'measure': {
+          const { measurement } = useUiStore.getState()
+          const drawing = gesture.moved || gesture.continued
+          if (!drawing && gesture.alt) {
+            // Alt+click pings, like with the other tools (a finished ruler stays).
+            ping(world)
+          } else if (event.shiftKey && measurement && drawing) {
+            // Shift on release keeps this point as a waypoint; the end follows the pointer.
+            const end = measurement.points.at(-1)
+            if (end)
+              useUiStore.setState({
+                measurement: { points: [...measurement.points, end] },
+                measuring: 'waypoint',
+              })
+          } else if (!drawing) {
+            // A plain click clears the ruler.
+            useUiStore.setState({ measurement: null, measuring: null })
+          } else {
+            useUiStore.setState({ measuring: null })
+          }
+          break
+        }
+        case 'aoePlace': {
+          const ui = useUiStore.getState()
+          if (!gesture.moved && gesture.alt) {
+            // Alt+click pings, and leaves the template being placed alone.
+            ping(world)
+          } else if (!gesture.moved) {
+            // A click places one the size of the last one.
+            useUiStore.setState({
+              tempTemplate: newTempTemplate(gesture.origin, ui.tempTemplate?.directionDeg),
+            })
+          } else if (ui.tempTemplate) {
+            useUiStore.setState({ aoeLastSizeFt: ui.tempTemplate.sizeFt })
+          }
+          break
+        }
+        case 'templateDrag': {
+          if (gesture.moved && liveDrag) {
+            moveTemplates(liveDrag)
+          } else if (event.altKey) {
+            ping(world)
+          }
+          useUiStore.setState({ liveDrag: null })
+          break
+        }
         case 'marquee': {
           setMarquee(null)
           if (!gesture.moved) {
@@ -337,6 +542,8 @@ export function DmCanvas() {
       if (gesture.kind === 'fogRect' || gesture.kind === 'fogBrush') {
         useUiStore.setState({ fogDraft: null })
       }
+      if (gesture.kind === 'measure') useUiStore.setState({ measurement: null, measuring: null })
+      if (gesture.kind === 'aoePlace' && gesture.moved) useUiStore.setState({ tempTemplate: null })
       return true
     }
 
@@ -476,6 +683,8 @@ export function DmCanvas() {
     // decide on release: a click without a drag still pings).
     const altDrags =
       currentTool === 'select' ||
+      currentTool === 'measure' ||
+      currentTool === 'aoe' ||
       (currentTool === 'fog' && useUiStore.getState().fogShape === 'rect')
     if (currentTool === 'ping' || (event.altKey && !altDrags)) {
       ping(world)
@@ -483,6 +692,38 @@ export function DmCanvas() {
     }
     if (currentTool === 'fog') {
       startFogShape(event, point, world)
+      return
+    }
+    if (currentTool === 'measure') {
+      const { measuring, measurement } = useUiStore.getState()
+      const continued = measuring === 'waypoint' && measurement !== null
+      if (continued) {
+        setRulerEnd(rulerPoint(world, event.altKey))
+        useUiStore.setState({ measuring: 'drag' })
+      }
+      gestureRef.current = {
+        kind: 'measure',
+        pointerId: event.pointerId,
+        startScreen: point,
+        start: rulerPoint(world, event.altKey),
+        moved: false,
+        continued,
+        alt: event.altKey,
+      }
+      return
+    }
+    if (currentTool === 'aoe') {
+      const ui = useUiStore.getState()
+      const free = event.altKey || !getCampaign().settings.snapEnabled
+      const origin = free ? world : snapTemplateOrigin(ui.aoeShape, world, aoeGrid())
+      gestureRef.current = {
+        kind: 'aoePlace',
+        pointerId: event.pointerId,
+        startScreen: point,
+        origin,
+        moved: false,
+        alt: event.altKey,
+      }
       return
     }
     if (currentTool === 'calibrate') {
@@ -496,6 +737,36 @@ export function DmCanvas() {
       return
     }
     if (currentTool !== 'select') return
+
+    // A pinned template (its outline or origin handle): select it and drag it.
+    const templateId = templateIdOf(e.target)
+    if (templateId !== null) {
+      const next = event.shiftKey
+        ? selection.includes(templateId)
+          ? selection.filter((s) => s !== templateId)
+          : [...selection, templateId]
+        : selection.includes(templateId)
+          ? selection
+          : [templateId]
+      setSelection(next)
+      if (!next.includes(templateId)) return
+      const current = currentScene()
+      const origins: Record<Id, Point> = {}
+      for (const selectedId of selectedTemplateIds(current, next)) {
+        const template = findTemplate(current, selectedId)
+        if (template) origins[selectedId] = { x: template.originX, y: template.originY }
+      }
+      gestureRef.current = {
+        kind: 'templateDrag',
+        pointerId: event.pointerId,
+        startScreen: point,
+        startWorld: world,
+        primaryId: templateId,
+        origins,
+        moved: false,
+      }
+      return
+    }
 
     const id = itemIdOf(e.target)
     // Alt+click on something that cannot move (locked item or layer) pings without selecting it.
@@ -571,7 +842,10 @@ export function DmCanvas() {
     const { dmCamera, dmViewport, tool: currentTool, hoveredId: hovered } = useUiStore.getState()
     setPointerWorld(screenToWorld(point, dmCamera, dmViewport))
     if (gestureRef.current) return
-    const { fogDraft } = useUiStore.getState()
+    const { fogDraft, measuring } = useUiStore.getState()
+    if (currentTool === 'measure' && measuring === 'waypoint') {
+      setRulerEnd(rulerPoint(screenToWorld(point, dmCamera, dmViewport), e.evt.altKey))
+    }
     if (currentTool === 'fog' && fogDraft?.type === 'polygon') {
       useUiStore.setState({
         fogDraft: { ...fogDraft, cursor: screenToWorld(point, dmCamera, dmViewport) },
@@ -620,7 +894,11 @@ export function DmCanvas() {
       ? 'grabbing'
       : spaceHeld
         ? 'grab'
-        : tool === 'calibrate' || tool === 'ping' || tool === 'fog'
+        : tool === 'calibrate' ||
+            tool === 'ping' ||
+            tool === 'fog' ||
+            tool === 'measure' ||
+            tool === 'aoe'
           ? 'crosshair'
           : hoveredMovable
             ? 'move'
@@ -691,6 +969,10 @@ export function DmCanvas() {
             </Group>
           </Layer>
           {!preview && <DmFogTint cover={visibleRect(camera, viewport)} />}
+          {/* Templates and the ruler; pinned templates are picked with the Select tool. */}
+          <Layer visible={!preview} listening={!preview && tool === 'select'}>
+            <Annotations scale={transform.scale} cover={visibleRect(camera, viewport)} />
+          </Layer>
           <Layer visible={!preview} listening={!preview}>
             <Overlay marquee={marquee} calibration={calibration} />
           </Layer>

@@ -8,6 +8,9 @@ import { GridShape } from './GridShape'
 import { ItemImage } from './ItemImage'
 import { PingRipple } from './PingRipple'
 import { TokenShape } from './TokenShape'
+import { TemplateShape } from './TemplateShape'
+import { RulerShape } from './RulerShape'
+import { rulerLabel } from '../geometry/ruler'
 import { ActiveTurnRing } from './ActiveTurnRing'
 
 /** A ping in a window's own clock: when it started there. */
@@ -125,7 +128,18 @@ export function PlayerSceneLayers({
         </Layer>
       )}
       {scene.fog && <FogLayer cover={cover} fog={scene.fog} mode="player" />}
+      {/* Above the fog: templates and the ruler are what the DM chose to show. */}
       <Layer listening={false} {...clip}>
+        {scene.templates.map((template) => (
+          <TemplateShape key={template.id} template={template} grid={grid} scale={scale} />
+        ))}
+        {scene.ruler && (
+          <RulerShape
+            points={scene.ruler.points}
+            label={rulerLabel(scene.ruler.feet, scene.ruler.cells, scene.ruler.units)}
+            scale={scale}
+          />
+        )}
         {pings.map((ping) => (
           <PingRipple
             key={ping.id}

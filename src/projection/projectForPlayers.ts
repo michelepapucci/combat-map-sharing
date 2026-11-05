@@ -1,5 +1,5 @@
 import { visibleRect } from '../geometry/camera'
-import { pathCells } from '../geometry/distance'
+import { rulerLength } from '../geometry/ruler'
 import {
   exploredBounds,
   footprintRegion,
@@ -281,15 +281,22 @@ function fogShape(shape: FogShape): FogShape | null {
 
 /** Pinned templates visible to players, then the temporary one being placed. */
 function playerTemplates(scene: Scene, ui: ProjectionUi): PlayerTemplate[] {
-  const all = ui.tempTemplate ? [...scene.templates, ui.tempTemplate] : scene.templates
+  const temp = ui.tempTemplate
+  // The template being placed, unless it was just pinned (same id): never twice.
+  const all =
+    temp && !scene.templates.some((t) => t.id === temp.id)
+      ? [...scene.templates, temp]
+      : scene.templates
   const shown: PlayerTemplate[] = []
   for (const t of all) {
     if (t.visibleToPlayers !== true) continue
+    // A template being dragged is shown where it is now, like a player token.
+    const at = livePosition(ui, t.id) ?? { x: t.originX, y: t.originY }
     shown.push({
       id: t.id,
       shape: t.shape,
-      originX: t.originX,
-      originY: t.originY,
+      originX: at.x,
+      originY: at.y,
       sizeFt: t.sizeFt,
       widthFt: t.widthFt,
       directionDeg: t.directionDeg,
@@ -307,11 +314,9 @@ function playerRuler(
 ): PlayerRuler | null {
   if (settings.shareRuler !== true || !measurement || measurement.points.length < 2) return null
   const points = measurement.points.map((p) => ({ x: p.x, y: p.y }))
-  const cells = pathCells(
-    points.map((p) => ({ x: p.x / grid.size, y: p.y / grid.size })),
-    settings.diagonalRule,
-  )
-  return { points, feet: cells * grid.feetPerCell, cells, units: settings.units }
+  // The same measurement as the DM's ruler (geometry/ruler), so both windows agree.
+  const { cells, feet } = rulerLength(points, grid, settings.diagonalRule)
+  return { points, feet, cells, units: settings.units }
 }
 
 function linkedToken(scene: Scene, entry: InitiativeEntry): Token | null {

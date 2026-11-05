@@ -24,13 +24,16 @@ import {
 } from '../store/actions'
 import { MOD } from '../dm/shortcuts'
 import { FogSettings } from './FogSettings'
+import { TemplateDetails } from './TemplateDetails'
 import { TokenDetails } from './TokenDetails'
+import { deleteTemplates } from '../store/templateActions'
 import { useActiveScene, useCampaign } from '../store/campaign'
 import { setTool, useUiStore } from '../store/ui'
 import {
   buttonClass,
   CommitNumberInput,
   CommitTextInput,
+  dangerButtonClass,
   Field,
   inputClass,
   SubsectionHeading,
@@ -340,6 +343,23 @@ export function PropertiesPanel() {
   const selection = useUiStore((s) => s.selection)
   const refs = selection.flatMap((id) => findItem(scene, id) ?? [])
   const single = refs.length === 1 ? refs[0] : undefined
+  const templates = scene.templates.filter((template) => selection.includes(template.id))
+  const onlyTemplate = refs.length === 0 && templates.length === 1 ? templates[0] : undefined
+  if (onlyTemplate) return <TemplateDetails key={onlyTemplate.id} template={onlyTemplate} />
+  if (refs.length === 0 && templates.length > 1) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm">{templates.length} templates selected</p>
+        <button
+          type="button"
+          className={dangerButtonClass}
+          onClick={() => deleteTemplates(templates.map((template) => template.id))}
+        >
+          Delete templates
+        </button>
+      </div>
+    )
+  }
   if (refs.length === 0) {
     return (
       <p className="text-xs text-fg-muted">

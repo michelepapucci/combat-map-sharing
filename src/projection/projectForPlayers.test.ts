@@ -836,6 +836,28 @@ function highlighted(init: Partial<Scene['initiative']>) {
   }
 }
 
+describe('templates', () => {
+  it('follow a live drag, and a just-pinned template is never sent twice', () => {
+    const campaign = structuredClone(sampleCampaign)
+    const scene = campaign.scenes[0]
+    const shownTemplate = scene?.templates.find((t) => t.visibleToPlayers)
+    if (!scene || !shownTemplate) throw new Error('unexpected sample')
+    const view = (ui: Partial<ProjectionUi>) => {
+      const v = projectForPlayers(campaign, { ...UI, ...ui }, PREFS)
+      if (v.blackout) throw new Error('blackout')
+      return v.scene.templates
+    }
+    const moved = view({ liveDrag: { [shownTemplate.id]: { x: 1000, y: 2000 } } })
+    expect(moved.find((t) => t.id === shownTemplate.id)).toMatchObject({
+      originX: 1000,
+      originY: 2000,
+    })
+    // The template being placed has the id of a pinned one (pinning in progress): sent once.
+    const twice = view({ tempTemplate: { ...shownTemplate, originX: 5 } })
+    expect(twice.filter((t) => t.id === shownTemplate.id)).toHaveLength(1)
+  })
+})
+
 describe('initiative', () => {
   it('is null while the tracker is not shown to players, with no active ring', () => {
     const s = project(tracked({ visibleToPlayers: false }))

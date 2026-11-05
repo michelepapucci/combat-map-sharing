@@ -30,6 +30,10 @@ declare global {
         find: (selector: string) => KonvaNode[]
         scaleX: () => number
         getLayers: () => KonvaNode[]
+        /** Stage transform: world (map) px to canvas px. */
+        getAbsoluteTransform: () => {
+          point: (p: { x: number; y: number }) => { x: number; y: number }
+        }
         container: () => HTMLDivElement
       }[]
     }

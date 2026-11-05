@@ -1,9 +1,17 @@
 import { HardDrive, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { DIAGONAL_RULES, UNIT_SYSTEMS, type DiagonalRule, type UnitSystem } from '../state/types'
+import {
+  AOE_COVERAGE_RULES,
+  DIAGONAL_RULES,
+  UNIT_SYSTEMS,
+  type AoeCoverageRule,
+  type DiagonalRule,
+  type UnitSystem,
+} from '../state/types'
 import { setUnrecorded, useCampaign } from '../store/campaign'
 import { useSessionStore } from '../store/session'
 import { setNpcVision } from '../store/fogActions'
+import { setAoeCoverage, setShareRuler } from '../store/templateActions'
 import { useUiStore } from '../store/ui'
 import { buttonClass, Field, inputClass, Toggle } from '../ui/controls'
 import { Dialog } from '../ui/Dialog'
@@ -119,10 +127,17 @@ function StorageSection() {
 }
 
 /** Campaign settings and device storage. Gist sync joins in milestone 8. */
+const COVERAGE_LABELS: Record<AoeCoverageRule, string> = {
+  center: 'Squares whose center is inside (5e default)',
+  half: 'Squares at least half covered',
+}
+
 export function SettingsDialog() {
   const diagonalRule = useCampaign((c) => c.settings.diagonalRule)
   const units = useCampaign((c) => c.settings.units)
   const npcVision = useCampaign((c) => c.settings.npcVision)
+  const aoeCoverage = useCampaign((c) => c.settings.aoeCoverage)
+  const shareRuler = useCampaign((c) => c.settings.shareRuler)
   return (
     <Dialog title="Settings" onClose={() => useUiStore.setState({ dialog: null })}>
       <div className="space-y-6">
@@ -175,6 +190,24 @@ export function SettingsDialog() {
               ))}
             </select>
           </Field>
+          <Field label="Squares an area of effect hits">
+            <select
+              value={aoeCoverage}
+              onChange={(event) => setAoeCoverage(event.target.value as AoeCoverageRule)}
+              className={inputClass}
+            >
+              {AOE_COVERAGE_RULES.map((rule) => (
+                <option key={rule} value={rule}>
+                  {COVERAGE_LABELS[rule]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Toggle
+            checked={shareRuler}
+            onChange={setShareRuler}
+            label="Share the ruler with players"
+          />
         </section>
         <section aria-labelledby="settings-storage" className="space-y-3">
           <h3 id="settings-storage" className="text-sm font-medium">

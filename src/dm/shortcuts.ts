@@ -15,6 +15,13 @@ import { useCampaignStore } from '../store/campaign'
 import { isModalOpen, notify, setSelection, setTool, useUiStore } from '../store/ui'
 import { getPointerWorld } from './canvas/pointer'
 import { nextTurn, previousTurn } from '../store/initiativeActions'
+import {
+  deleteTemplates,
+  nudgeTemplates,
+  pinTemplate,
+  selectedTemplateIds,
+  toggleTemplatesVisible,
+} from '../store/templateActions'
 import { closeFogPolygon, removeLastFogCorner } from './fogTool'
 import { flushSave } from './session'
 
@@ -56,8 +63,12 @@ export const SHORTCUT_GROUPS: readonly {
         action: 'Fog: drag a rectangle or brush, or click polygon corners (Enter closes)',
       },
       {
-        keys: ['M', 'A'],
-        action: 'Measure, area of effect (later milestones)',
+        keys: ['M'],
+        action: 'Measure: drag from a square; Shift on release adds a waypoint; Alt is free',
+      },
+      {
+        keys: ['A'],
+        action: 'Area of effect: drag from the origin; Enter pins it, Esc discards it',
       },
       { keys: ['?'], action: 'This cheat sheet' },
     ],
@@ -167,18 +178,49 @@ export function handleShortcut(event: KeyboardEvent): boolean {
   if (arrow) {
     if (selection.length === 0) return false
     const step = event.shiftKey ? 1 : currentScene().grid.size
-    nudgeItems(selection, arrow[0] * step, arrow[1] * step)
+    // Selected templates move with the arrows too (they are not items).
+    const templates = selectedTemplateIds(currentScene(), selection)
+    const items = selection.filter((id) => !templates.includes(id))
+    if (items.length > 0) nudgeItems(items, arrow[0] * step, arrow[1] * step)
+    if (templates.length > 0) nudgeTemplates(templates, arrow[0] * step, arrow[1] * step)
     return true
   }
   switch (key) {
     case 'Delete':
-    case 'Backspace':
+    case 'Backspace': {
       if (selection.length === 0) return false
-      deleteItems(selection)
+      // Pinned templates are selectable too; items and templates are deleted apart.
+      const templates = selectedTemplateIds(currentScene(), selection)
+      const items = selection.filter((id) => !templates.includes(id))
+      if (items.length > 0) deleteItems(items)
+      if (templates.length > 0) deleteTemplates(templates)
       return true
-    case 'h':
-      toggleHidden(selection)
+    }
+    case 'h': {
+      const templates = selectedTemplateIds(currentScene(), selection)
+      const items = selection.filter((id) => !templates.includes(id))
+      if (items.length > 0) toggleHidden(items)
+      if (templates.length > 0) toggleTemplatesVisible(templates)
       return selection.length > 0
+    }
+    case 'Enter':
+      // Pins the template being placed (Area of effect tool), unless Enter is
+      // pressing a focused button or similar control.
+      if (ui.tool !== 'aoe' || !ui.tempTemplate) return false
+      if (
+        event.target instanceof Element &&
+        event.target.closest('button, a, [role="button"], [role="radio"], [role="tab"]')
+      ) {
+        return false
+      }
+      pinTemplate()
+      return true
+    case 'm':
+      setTool('measure')
+      return true
+    case 'a':
+      setTool('aoe')
+      return true
     case 'l':
       toggleLocked(selection)
       return selection.length > 0
@@ -204,6 +246,8 @@ export function handleShortcut(event: KeyboardEvent): boolean {
       if (ui.previewAsPlayers) useUiStore.setState({ previewAsPlayers: false })
       else if (ui.contextMenu) useUiStore.setState({ contextMenu: null })
       else if (ui.fogDraft) useUiStore.setState({ fogDraft: null })
+      else if (ui.measurement) useUiStore.setState({ measurement: null, measuring: null })
+      else if (ui.tempTemplate) useUiStore.setState({ tempTemplate: null })
       else if (ui.tool !== 'select') setTool('select')
       else if (selection.length > 0) setSelection([])
       else return false
