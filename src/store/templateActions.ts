@@ -141,7 +141,7 @@ export function pinTemplate(): Id | null {
     sceneOf(draft).templates.push(template)
   })
   setSelection([template.id])
-  notify('Template pinned: select it to move, edit or delete it.')
+  notify('Template pinned: select it to move, edit or delete it.', 'success')
   return template.id
 }
 

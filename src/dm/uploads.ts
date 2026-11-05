@@ -132,7 +132,7 @@ export async function importImageFiles(
   const campaignId = openCampaignId()
   if (campaignId === null) return []
   if (useUiStore.getState().importProgress) {
-    notify('Another import is still running. Try again when it has finished.')
+    notify('Another import is still running. Try again when it has finished.', 'warning')
     return []
   }
   const notes: string[] = []
@@ -151,7 +151,7 @@ export async function importImageFiles(
       ? `Added ${plural(added.length, `${kind} image`)} to the library.`
       : 'No images were added.'
   if (notes.length > 0) notifySticky([summary, ...notes])
-  else notify(summary)
+  else notify(summary, 'success')
   const [only] = added
   if (review && added.length === 1 && only) useUiStore.setState({ editingAssetId: only.id })
   return added

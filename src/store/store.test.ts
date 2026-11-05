@@ -184,7 +184,7 @@ describe('editing', () => {
     nudgeItems([a], 70, 0)
     deleteItems([a])
     expect(token(a)).toMatchObject({ x: 35, y: 35 })
-    expect(useUiStore.getState().notice?.lines.join(' ')).toMatch(/Unlock/)
+    expect(useUiStore.getState().toasts.at(-1)?.lines.join(' ')).toMatch(/Unlock/)
   })
 
   it('coalesces repeated nudges', () => {

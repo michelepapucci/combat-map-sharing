@@ -28,6 +28,8 @@ import { ContextMenu } from './ContextMenu'
 import { GistHistoryDialog } from './GistHistoryDialog'
 import { GistIndicator } from './GistIndicator'
 import { SaveIndicator } from './SaveIndicator'
+import { Tour } from './Tour'
+import { startTourIfNew } from './tour'
 import { SceneBar } from './SceneBar'
 import { setBlackout } from './presentation'
 import { startSession } from './session'
@@ -111,6 +113,8 @@ function Workspace() {
   const [theme, setTheme] = useTheme()
   const nextTheme = theme === 'dark' ? 'light' : 'dark'
   useShortcuts()
+  // The first time this device opens the DM window, the getting-started tour.
+  useEffect(() => startTourIfNew(), [])
   const docked = useHasDockedPanels()
   // This device's panel layout, before the first paint (no flash of the default layout).
   useLayoutEffect(() => loadPanelLayout(), [])
@@ -153,6 +157,7 @@ function Workspace() {
           />
           <button
             type="button"
+            data-tour="player-window"
             onClick={() => openPlayerWindow()}
             className="flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:brightness-110"
           >
@@ -177,6 +182,7 @@ function Workspace() {
       </div>
       <FloatingPanels />
       <ContextMenu />
+      <Tour />
       <ShortcutsDialog />
       <Dialogs />
     </div>

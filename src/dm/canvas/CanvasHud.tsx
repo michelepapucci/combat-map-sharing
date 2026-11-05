@@ -1,5 +1,5 @@
-import { LoaderCircle, Maximize, Minus, Plus, ScanEye, Upload, X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { Maximize, Minus, Plus, ScanEye, Upload, X } from 'lucide-react'
+import { useRef } from 'react'
 import { IMAGE_MIMES } from '../../assets/upload/plan'
 import { builtinThumbnailUrl, MAP_ASSETS } from '../../assets/builtin/registry'
 import { clampZoom, fitRect, zoomAt } from '../../geometry/camera'
@@ -9,6 +9,7 @@ import { setTool, useUiStore } from '../../store/ui'
 import { setSceneFog, type FogBrushShape } from '../../store/fogActions'
 import { placeLibraryEntry } from '../placement'
 import { PreviewInitiative } from './FogViews'
+import { Toasts } from '../Toasts'
 import { AoeToolbar, MeasureToolbar } from './ToolOptions'
 import { importAndPlace } from '../uploads'
 import { buttonClass, CommitNumberInput, Segmented } from '../../ui/controls'
@@ -268,54 +269,6 @@ function EmptyState() {
   )
 }
 
-function Notice() {
-  const notice = useUiStore((s) => s.notice)
-  const progress = useUiStore((s) => s.importProgress)
-  useEffect(() => {
-    if (!notice || notice.sticky) return
-    const timer = setTimeout(() => {
-      if (useUiStore.getState().notice?.id === notice.id) useUiStore.setState({ notice: null })
-    }, 3500)
-    return () => clearTimeout(timer)
-  }, [notice])
-  const box =
-    'pointer-events-auto max-w-[min(36rem,calc(100vw-4rem))] rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-lg'
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="pointer-events-none absolute bottom-16 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
-    >
-      {progress && (
-        <p className={`${box} flex items-center gap-2`}>
-          <LoaderCircle aria-hidden className="size-4 animate-spin text-fg-muted" />
-          Importing image {Math.min(progress.done + 1, progress.total)} of {progress.total}…
-        </p>
-      )}
-      {notice && (
-        <div className={`${box} flex items-start gap-2`}>
-          <div className="space-y-1">
-            {notice.lines.map((line, i) => (
-              <p key={i}>{line}</p>
-            ))}
-          </div>
-          {notice.sticky && (
-            <button
-              type="button"
-              onClick={() => useUiStore.setState({ notice: null })}
-              aria-label="Dismiss message"
-              title="Dismiss"
-              className="-my-0.5 -mr-1 shrink-0 rounded-md p-1 text-fg-muted hover:bg-surface-3 hover:text-fg"
-            >
-              <X aria-hidden className="size-4" />
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function PreviewBanner() {
   return (
     <div
@@ -361,7 +314,7 @@ export function CanvasHud() {
         </>
       )}
       <ZoomControls />
-      <Notice />
+      <Toasts />
     </div>
   )
 }

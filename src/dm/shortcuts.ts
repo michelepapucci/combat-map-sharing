@@ -164,7 +164,7 @@ export function handleShortcut(event: KeyboardEvent): boolean {
           return true
         }
         flushSave().then(
-          () => notify('Saved in this browser.'),
+          () => notify('Saved in this browser.', 'success'),
           () => undefined, // the save indicator shows the error
         )
         return true

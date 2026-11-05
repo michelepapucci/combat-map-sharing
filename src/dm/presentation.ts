@@ -33,7 +33,8 @@ export function startPresentation(): void {
     project,
     onPlayers: (count, change) => {
       useSessionStore.setState({ players: count })
-      notify(change === 'connected' ? 'Player window connected.' : 'Player window disconnected.')
+      if (change === 'connected') notify('Player window connected.', 'success')
+      else notify('Player window disconnected.', 'warning')
     },
   })
   sync = current
@@ -114,7 +115,7 @@ export function pushView(): void {
     memory.playerView = view
     draft.presentation.cameraMode = 'pushed'
   })
-  notify('View pushed to players.')
+  notify('View pushed to players.', 'success')
 }
 
 export function setBlackout(blackout: boolean): void {

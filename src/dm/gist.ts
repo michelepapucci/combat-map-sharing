@@ -261,7 +261,7 @@ export async function connectGist(token: string, remember: boolean): Promise<boo
   try {
     login = (await client.getUser()).login
   } catch (error) {
-    notifySticky([`GitHub did not accept the token: ${errorText(error)}`])
+    notifySticky([`GitHub did not accept the token: ${errorText(error)}`], 'error')
     return false
   }
   if (!live(at)) return false
@@ -271,7 +271,7 @@ export async function connectGist(token: string, remember: boolean): Promise<boo
   try {
     if (remember) await saveToken(trimmed)
     else await forgetToken()
-    notify(`Connected to GitHub as ${login}.`)
+    notify(`Connected to GitHub as ${login}.`, 'success')
   } catch {
     notifySticky([
       `Connected to GitHub as ${login}, but this browser could not remember the token: you will paste it again next time.`,
@@ -305,8 +305,10 @@ function reportPush(campaignId: string, result: PushResult, auto: boolean): void
   if (auto) {
     // Automatic saves say it once, when the set of such images changes.
     if (skipped > 0 && changed) notifySticky([`Saved to the gist. ${text}`])
+  } else if (skipped > 0) {
+    notifySticky([`Saved to the gist. ${text}`])
   } else {
-    notify(skipped > 0 ? `Saved to the gist. ${text}` : 'Saved to the gist.')
+    notify('Saved to the gist.', 'success')
   }
 }
 
@@ -372,7 +374,7 @@ export async function saveToGist(options: { auto?: boolean; force?: boolean } = 
       if (!options.auto) await resolveConflict()
     } else {
       failed(error)
-      if (!options.auto) notifySticky([`Saving to the gist failed: ${errorText(error)}`])
+      if (!options.auto) notifySticky([`Saving to the gist failed: ${errorText(error)}`], 'error')
     }
   } finally {
     if (live(at)) {
@@ -499,13 +501,14 @@ export async function loadFromGist(
         options.revision
           ? 'Earlier version restored. Save to make it the gist’s latest.'
           : 'Loaded from the gist.',
+        'success',
       )
     }
   } catch (error) {
     if (!live(at)) return
     syncing = false
     failed(error)
-    notifySticky([`Loading from the gist failed: ${errorText(error)}`])
+    notifySticky([`Loading from the gist failed: ${errorText(error)}`], 'error')
   } finally {
     release(written)
     if (live(at)) syncing = false
@@ -591,10 +594,10 @@ export async function openGist(input: string): Promise<boolean> {
     }
     clearProblem()
     const warned = await reportMissing(campaign, result.missingAssets)
-    if (!warned) notify(`Opened “${campaign.name}” from the gist.`)
+    if (!warned) notify(`Opened “${campaign.name}” from the gist.`, 'success')
     return true
   } catch (error) {
-    if (live(at)) notifySticky([`The gist could not be opened: ${errorText(error)}`])
+    if (live(at)) notifySticky([`The gist could not be opened: ${errorText(error)}`], 'error')
     return false
   } finally {
     release(written)

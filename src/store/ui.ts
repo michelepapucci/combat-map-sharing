@@ -20,13 +20,24 @@ export interface ClipboardEntry {
   item: Item | Token
 }
 
-export interface Notice {
+export type ToastKind = 'info' | 'success' | 'warning' | 'error'
+
+/** A message in the toast stack (SPEC §8 "Toasts"). */
+export interface Toast {
   id: number
   /** One or more sentences; each paragraph on its own line. */
   lines: string[]
+  kind: ToastKind
   /** Stays until dismissed (warnings and errors); otherwise it fades after a few seconds. */
   sticky: boolean
+  /** How many times the same message came in a row (shown as ×N). */
+  count: number
+  /** When it last came (restarts the fade). */
+  at: number
 }
+
+/** At most this many toasts are shown; older ones make room (non-sticky first). */
+export const MAX_TOASTS = 4
 
 /**
  * Transient DM window state (never persisted, never undoable): the shared
@@ -42,11 +53,13 @@ export interface DmUiState extends UiState {
   /** Consecutive pastes of the same clipboard, to offset each one. */
   pasteCount: number
   shortcutsOpen: boolean
+  /** The getting-started tour is showing. */
+  tourOpen: boolean
   /** Calibration tool: the box drawn by the DM spans this many cells per side. */
   calibrationCells: number
   /** Ring color for new tokens; null = the default color of the token's kind. */
   tokenColor: string | null
-  notice: Notice | null
+  toasts: Toast[]
   /** An image import in progress: shown as a progress notice, and Upload buttons are disabled. */
   importProgress: { done: number; total: number } | null
   /** Incremented to ask the properties panel to take focus ("Edit token"). */
@@ -111,9 +124,10 @@ export function initialUiState(): DmUiState {
     clipboard: null,
     pasteCount: 0,
     shortcutsOpen: false,
+    tourOpen: false,
     calibrationCells: 1,
     tokenColor: null,
-    notice: null,
+    toasts: [],
     importProgress: null,
     propertiesFocusRequest: 0,
     sceneCameras: {},
@@ -160,18 +174,47 @@ export function setSelection(selection: Id[]): void {
   if (!same) useUiStore.setState({ selection })
 }
 
-let noticeId = 0
+let toastId = 0
 
-/** Shows a short status message at the bottom of the canvas; it fades after a few seconds. */
-export function notify(text: string): void {
-  noticeId += 1
-  useUiStore.setState({ notice: { id: noticeId, lines: [text], sticky: false } })
+function pushToast(lines: string[], kind: ToastKind, sticky: boolean): void {
+  const { toasts } = useUiStore.getState()
+  const last = toasts.at(-1)
+  // The same message again: count it instead of stacking copies.
+  if (last && last.kind === kind && last.lines.join('\n') === lines.join('\n')) {
+    useUiStore.setState({
+      toasts: [...toasts.slice(0, -1), { ...last, count: last.count + 1, at: Date.now() }],
+    })
+    return
+  }
+  toastId += 1
+  const next = [...toasts, { id: toastId, lines, kind, sticky, count: 1, at: Date.now() }]
+  // Too many: the oldest fading toast makes room, else the oldest one. Never
+  // the new one, even when every older toast is sticky.
+  while (next.length > MAX_TOASTS) {
+    const fading = next.slice(0, -1).findIndex((toast) => !toast.sticky)
+    next.splice(fading >= 0 ? fading : 0, 1)
+  }
+  useUiStore.setState({ toasts: next })
 }
 
-/** Shows a message that stays until the DM dismisses it (warnings, errors, several lines). */
-export function notifySticky(lines: string[]): void {
-  noticeId += 1
-  useUiStore.setState({ notice: { id: noticeId, lines, sticky: true } })
+/** A short message (a toast) that fades after a few seconds. */
+export function notify(
+  text: string,
+  kind: Extract<ToastKind, 'info' | 'success'> | 'warning' = 'info',
+): void {
+  pushToast([text], kind, false)
+}
+
+/** A message that stays until the DM dismisses it (warnings, errors, several lines). */
+export function notifySticky(
+  lines: string[],
+  kind: Extract<ToastKind, 'warning' | 'error'> = 'warning',
+): void {
+  pushToast(lines, kind, true)
+}
+
+export function dismissToast(id: number): void {
+  useUiStore.setState((ui) => ({ toasts: ui.toasts.filter((toast) => toast.id !== id) }))
 }
 
 /**
@@ -206,8 +249,9 @@ export function resetUiForCampaign(): void {
     tokenColor,
     calibrationCells,
     dmViewport,
-    notice,
+    toasts,
     importProgress,
+    tourOpen,
     fogMode,
     fogShape,
     fogBrushCells,
@@ -230,7 +274,9 @@ export function resetUiForCampaign(): void {
     aoeLastSizeFt,
     aoeVisibleToPlayers,
     dmViewport,
-    notice,
+    toasts,
     importProgress,
+    // Opening another campaign (step 4 suggests backups and gists) keeps the tour open.
+    tourOpen,
   })
 }

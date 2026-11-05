@@ -525,7 +525,7 @@ export function DmCanvas() {
           if (!gesture.moved) break
           const rect = rectFromPoints(gesture.startWorld, world)
           if (calibrateGrid(rect, useUiStore.getState().calibrationCells)) setTool('select')
-          else notify('That box is too small: drag it over whole cells of the map grid.')
+          else notify('That box is too small: drag it over whole cells of the map grid.', 'warning')
           break
         }
       }

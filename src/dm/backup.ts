@@ -61,10 +61,10 @@ export async function exportBackup(): Promise<void> {
         `Backup saved, without ${missing.length} ${missing.length === 1 ? 'image' : 'images'} this device does not have.`,
       ])
     } else {
-      notify('Backup saved to your downloads.')
+      notify('Backup saved to your downloads.', 'success')
     }
   } catch (error) {
-    notifySticky([`The backup could not be made: ${errorText(error)}`])
+    notifySticky([`The backup could not be made: ${errorText(error)}`], 'error')
   }
 }
 
@@ -79,7 +79,7 @@ export async function importBackup(file: File): Promise<void> {
   } catch (error) {
     const reason =
       error instanceof BackupError ? error.message : `It could not be read: ${errorText(error)}`
-    notifySticky([`“${file.name}” was not imported. ${reason}`])
+    notifySticky([`“${file.name}” was not imported. ${reason}`], 'error')
     return
   }
 
@@ -126,7 +126,7 @@ export async function importBackup(file: File): Promise<void> {
     }
   } catch (error) {
     for (const id of written) pendingUploads.delete(id)
-    notifySticky([`The backup's images could not be stored: ${errorText(error)}`])
+    notifySticky([`The backup's images could not be stored: ${errorText(error)}`], 'error')
     return
   }
   const adopted = await adoptCampaign(campaign)
@@ -139,6 +139,6 @@ export async function importBackup(file: File): Promise<void> {
       `Imported “${campaign.name}”, but ${missing.length} ${missing.length === 1 ? 'image was' : 'images were'} missing or damaged in the backup.`,
     ])
   } else {
-    notify(`Imported “${campaign.name}”.`)
+    notify(`Imported “${campaign.name}”.`, 'success')
   }
 }

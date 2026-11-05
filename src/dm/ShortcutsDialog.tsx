@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useUiStore } from '../store/ui'
+import { openTour } from './tour'
 import { SHORTCUT_GROUPS } from './shortcuts'
 
 /** Keyboard cheat sheet (SPEC §5.3, opened with ?). A native modal dialog: Esc closes it. */
@@ -63,6 +64,16 @@ export function ShortcutsDialog() {
             </table>
           </section>
         ))}
+        <button
+          type="button"
+          className="text-sm text-accent underline underline-offset-2 hover:brightness-110"
+          onClick={() => {
+            ref.current?.close()
+            openTour()
+          }}
+        >
+          Show the getting-started tour again
+        </button>
       </div>
     </dialog>
   )

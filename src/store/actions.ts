@@ -107,7 +107,7 @@ export function movableIds(ids: readonly Id[]): Id[] {
 function requireMovable(ids: readonly Id[], verb: string): Id[] {
   const movable = movableIds(ids)
   if (movable.length === 0 && ids.length > 0)
-    notify(`Locked items can't be ${verb}. Unlock them first.`)
+    notify(`Locked items can't be ${verb}. Unlock them first.`, 'warning')
   return movable
 }
 
@@ -598,7 +598,7 @@ export function calibrateGrid(box: Rect, cells: number): boolean {
   const result = calibrateFromBox(box, cells)
   if (!result) return false
   updateGrid(result, { label: 'Calibrate grid' })
-  notify(`Grid set to ${Math.round(result.size * 10) / 10} px per cell`)
+  notify(`Grid set to ${Math.round(result.size * 10) / 10} px per cell`, 'success')
   return true
 }
 
@@ -636,7 +636,10 @@ function sceneSwitchBlocked(target: Id | undefined): string | null {
 }
 
 function explainBlocked(verb: 'Undo' | 'Redo', scene: string): void {
-  notify(`${verb} would show players “${scene}”. Switch to that scene first, or turn on blackout.`)
+  notify(
+    `${verb} would show players “${scene}”. Switch to that scene first, or turn on blackout.`,
+    'warning',
+  )
 }
 
 export function undoAction(): void {

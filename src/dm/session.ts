@@ -128,7 +128,7 @@ function onSaveStatus(status: SaveStatus, error: unknown): void {
   // The first failure gets a message that stays; the indicator stays red until a save works.
   if (message && !saveErrorShown) {
     saveErrorShown = true
-    notifySticky([message])
+    notifySticky([message], 'error')
   }
 }
 
@@ -216,7 +216,10 @@ async function saveBeforeLeaving(): Promise<boolean> {
     await flushSave()
     return true
   } catch (error) {
-    notify(`The current campaign could not be saved, so it stays open. ${saveErrorMessage(error)}`)
+    notifySticky(
+      [`The current campaign could not be saved, so it stays open. ${saveErrorMessage(error)}`],
+      'error',
+    )
     return false
   }
 }
@@ -231,7 +234,7 @@ async function showNewCampaign(at: number): Promise<void> {
       if (!current(at)) return
       showCampaign(campaign, at)
       autosaver?.schedule(campaign)
-      notifySticky([`The new campaign could not be saved yet. ${saveErrorMessage(error)}`])
+      notifySticky([`The new campaign could not be saved yet. ${saveErrorMessage(error)}`], 'error')
       return
     }
   }
@@ -256,7 +259,7 @@ export async function openCampaign(id: string): Promise<void> {
   } catch (error) {
     if (!current(at)) return
     if (open) {
-      notify(`That campaign could not be opened: ${errorMessage(error)}`)
+      notifySticky([`That campaign could not be opened: ${errorMessage(error)}`], 'error')
     } else {
       unloadCampaign()
       setSession({ phase: 'failed', failure: { campaignId: id, message: errorMessage(error) } })
@@ -280,11 +283,11 @@ export async function duplicateCampaign(id: string): Promise<boolean> {
       updatedAt: now,
     }
     await writeCampaign(copy)
-    notify(`Created ${copy.name}.`)
+    notify(`Created ${copy.name}.`, 'success')
     await refreshCampaigns().catch(() => undefined)
     return true
   } catch (error) {
-    notify(`The campaign could not be duplicated: ${errorMessage(error)}`)
+    notifySticky([`The campaign could not be duplicated: ${errorMessage(error)}`], 'error')
     await refreshCampaigns().catch(() => undefined)
     return false
   }
@@ -313,7 +316,7 @@ export async function adoptCampaign(campaign: CampaignState): Promise<boolean> {
     if (!useSessionStore.getState().storageUnavailable) await writeCampaign(campaign)
   } catch (error) {
     if (replacing && current(at)) startAutosave()
-    notifySticky([`The campaign could not be stored. ${saveErrorMessage(error)}`])
+    notifySticky([`The campaign could not be stored. ${saveErrorMessage(error)}`], 'error')
     return false
   }
   if (!current(at)) return false
@@ -346,7 +349,7 @@ export async function deleteCampaign(id: string): Promise<void> {
     }
     await collectGarbage()
   } catch (error) {
-    notify(`The campaign could not be deleted: ${errorMessage(error)}`)
+    notifySticky([`The campaign could not be deleted: ${errorMessage(error)}`], 'error')
     // Never leave the open campaign without autosave.
     if (deletingOpen && current(at) && !autosaver) startAutosave()
   }

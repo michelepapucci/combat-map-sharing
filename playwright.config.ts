@@ -12,6 +12,19 @@ const DEV_PORT = 4178
 const BASE = '/combat-map-sharing/'
 const isCI = !!process.env.CI
 
+/**
+ * Every test starts with the getting-started tour already seen (it would cover
+ * the page); e2e/tour.spec.ts clears this to test the tour itself.
+ */
+function tourSeen(port: number) {
+  return {
+    cookies: [],
+    origins: [
+      { origin: `http://localhost:${port}`, localStorage: [{ name: 'vtt:tour', value: 'done' }] },
+    ],
+  }
+}
+
 export default defineConfig({
   testDir: 'e2e',
   fullyParallel: true,
@@ -25,12 +38,20 @@ export default defineConfig({
     {
       name: 'chromium',
       testIgnore: /\.dev\.spec\.ts$/,
-      use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${PORT}${BASE}` },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${PORT}${BASE}`,
+        storageState: tourSeen(PORT),
+      },
     },
     {
       name: 'dev',
       testMatch: /\.dev\.spec\.ts$/,
-      use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${DEV_PORT}${BASE}` },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${DEV_PORT}${BASE}`,
+        storageState: tourSeen(DEV_PORT),
+      },
     },
   ],
   webServer: [
