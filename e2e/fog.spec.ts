@@ -232,10 +232,13 @@ test('players see black, dimmed explored and clear visible ground; explored grou
   // destination becomes visible, the ground behind stays black.
   await page.getByTestId('dm-canvas').click({ position: dmHero })
   await nudge(page, 'ArrowRight', 8)
+  // Views are throttled: wait until the player shows the hero on its last square,
+  // not an intermediate step (where the start would still be in sight).
+  await expect.poll(async () => (await centerOf(player, heroId)).x).toBeCloseTo(at(8).x, 0)
   await expect.poll(() => brightness(player, far)).toBeGreaterThan(0)
+  await expect.poll(() => brightness(player, near)).toBeLessThan(clear * 0.8)
   const dim = await brightness(player, near)
   expect(dim).toBeGreaterThan(0)
-  expect(dim).toBeLessThan(clear * 0.8)
   expect(await brightness(player, behind)).toBe(0)
 
   // Explored memory survives reloading the player window.
