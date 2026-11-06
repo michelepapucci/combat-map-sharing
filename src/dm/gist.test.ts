@@ -154,3 +154,69 @@ describe('gist sync in the DM window', () => {
     expect(link?.gistId).not.toBe('abc123')
   })
 })
+
+/** Commits in the (only) gist. */
+const commits = () => [...github.gists.values()][0]?.history.length ?? 0
+
+async function until(condition: () => boolean): Promise<void> {
+  for (let i = 0; i < 400 && !condition(); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  if (!condition()) throw new Error('timed out')
+}
+
+function change(name: string): void {
+  commit('Rename', (draft) => {
+    draft.name = name
+  })
+  expect(useGistStore.getState().status).toBe('unsynced')
+}
+
+/** Moves the clock on; a save that starts shows as 'syncing' at once. */
+function wait(ms: number): void {
+  vi.advanceTimersByTime(ms)
+}
+
+async function restart(): Promise<void> {
+  stopGist()
+  startGist(actions)
+  if (!(await connectGist(FAKE_TOKEN, false))) throw new Error('the fake GitHub refused the token')
+}
+
+describe('automatic saves', () => {
+  beforeEach(async () => {
+    // Only the 20 s check (setInterval) and the clock are fake: IndexedDB and
+    // the fake GitHub keep their real timers.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    await restart()
+  })
+
+  afterEach(() => {
+    stopGist()
+    vi.useRealTimers()
+  })
+
+  it('wait a full interval after a manual save (Ctrl+S restarts the wait)', async () => {
+    await saveToGist()
+    const saved = commits()
+    change('Changed here')
+    wait(100_000)
+    expect(useGistStore.getState().status).toBe('unsynced')
+    wait(40_000) // 140 s after the manual save: past the 2-minute interval
+    await until(() => useGistStore.getState().status === 'synced')
+    expect(commits()).toBeGreaterThan(saved)
+  })
+
+  it('come a full interval after the DM window starts syncing, not at the first check', async () => {
+    await saveToGist()
+    stopGist()
+    wait(10 * 60_000) // the last save is long past
+    await restart()
+    await until(() => useGistStore.getState().link !== null) // read back from IndexedDB
+    change('Changed after reopening')
+    wait(100_000)
+    expect(useGistStore.getState().status).toBe('unsynced')
+    wait(40_000)
+    await until(() => useGistStore.getState().status === 'synced')
+  })
+})

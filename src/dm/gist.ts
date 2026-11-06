@@ -60,7 +60,11 @@ let syncing = false
 let running = false
 let unsubscribe: (() => void) | null = null
 let timer: ReturnType<typeof setInterval> | null = null
-let lastAutoAttempt = 0
+/**
+ * When this tab last started a gist save, manual or automatic (or started
+ * syncing): automatic saves wait a full interval after it.
+ */
+let lastSaveAttempt = 0
 /** HTTP status of the last failure (0: network or other): a rejected token (401) stops auto-sync. */
 let lastErrorStatus: number | null = null
 /** Bumped when this tab stops (or starts) syncing: older operations then write nothing. */
@@ -175,6 +179,7 @@ async function storeLink(campaignId: string, link: GistLink, at: number): Promis
 export function startGist(actions: GistSessionActions): void {
   if (running) return
   running = true
+  lastSaveAttempt = Date.now()
   gistEpoch += 1
   const at = gistEpoch
   session = actions
@@ -245,9 +250,8 @@ async function syncIfDue(sceneSwitch: boolean): Promise<void> {
   const retrying = status === 'error' && lastErrorStatus !== 401 && dirty(campaign, link)
   if (status !== 'unsynced' && !retrying) return
   const minutes = retrying ? Math.max(link.intervalMin, 5) : link.intervalMin
-  const due = Date.now() - lastAutoAttempt >= minutes * 60_000
+  const due = Date.now() - lastSaveAttempt >= minutes * 60_000
   if (!due && !(sceneSwitch && !retrying)) return
-  lastAutoAttempt = Date.now()
   await saveToGist({ auto: true })
 }
 
@@ -318,6 +322,7 @@ export async function saveToGist(options: { auto?: boolean; force?: boolean } = 
   if (!client || syncing || !running) return
   const at = gistEpoch
   syncing = true
+  lastSaveAttempt = Date.now() // Ctrl+S restarts the auto-sync interval too
   set({ status: 'syncing', error: null, progress: { phase: 'checking', done: 0, total: 0 } })
   try {
     await session?.flushSave().catch(() => undefined) // the gist gets the campaign as it is in memory

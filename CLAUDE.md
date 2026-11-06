@@ -429,7 +429,7 @@ Choices where the spec was ambiguous, incomplete or in conflict with a technical
      - A link belongs to a local campaign id, and loading from the gist keeps that id.
 104. **Status and auto-sync.**
      - **Header:** the indicator shows synced, unsynced, saving (with image progress), error, or "Gist changed elsewhere". It is hidden for campaigns without a gist.
-     - **Auto-sync** is on by default for linked campaigns: every 2 minutes (1–30 configurable) and on scene switches, only when there are changes.
+     - **Auto-sync** is on by default for linked campaigns: every 2 minutes (1–30 configurable) and on scene switches, only when there are changes. The interval runs from the last save, manual or automatic, or from when the DM window started syncing: the first automatic save comes a full interval after opening the app, and Ctrl+S restarts the wait. Scene switches still save at once. A check every 20 s starts the save once the interval has passed.
      - **Unsynced** means the campaign's `updatedAt` is later than at the last sync. `updatedAt` only grows, even when this computer's clock is behind the one that last saved.
      - **Errors:** after an error, auto-sync keeps retrying at least 5 minutes apart, unless GitHub rejected the token. A conflict stops it until the DM chooses.
      - **Notices:** images that cannot go to the gist are reported on each manual save, and by auto-sync only when that set of images changes.
