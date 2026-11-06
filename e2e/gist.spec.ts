@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from '@playwright/test'
+import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
 import { createFakeGitHub, TEST_LOGIN, TEST_TOKEN } from './fakeGitHub.ts'
 import { makePng } from './png.ts'
 
@@ -24,6 +24,16 @@ function libraryButton(page: Page, name: string) {
   return page.getByRole('tabpanel').getByRole('button', { name: new RegExp(`^${name}`) })
 }
 
+/**
+ * Closes a dialog and waits until the app has handled it. The native 'close'
+ * event that clears the open dialog comes a task after the click, and until
+ * then shortcuts such as Ctrl+S are ignored, as they are under any dialog.
+ */
+async function closeDialog(dialog: Locator) {
+  await dialog.getByRole('button', { name: 'Close' }).click()
+  await expect(dialog).toHaveCount(0)
+}
+
 async function openSettings(page: Page) {
   await page.getByRole('button', { name: /^Settings/ }).click()
   return page.getByRole('dialog', { name: 'Settings' })
@@ -42,7 +52,7 @@ async function rename(page: Page, name: string) {
   const dialog = page.getByRole('dialog', { name: 'Campaigns' })
   await dialog.getByRole('textbox', { name: 'Name of this campaign' }).fill(name)
   await dialog.getByRole('textbox', { name: 'Name of this campaign' }).press('Enter')
-  await dialog.getByRole('button', { name: 'Close' }).click()
+  await closeDialog(dialog)
 }
 
 test('a campaign saved to a gist opens on another computer, images included', async ({
@@ -76,13 +86,13 @@ test('a campaign saved to a gist opens on another computer, images included', as
   await settings.getByLabel('GitHub token').fill('github_pat_WRONG')
   await settings.getByRole('button', { name: 'Connect' }).click()
   await expect(page.getByText(/GitHub did not accept the token/)).toBeVisible()
-  await settings.getByRole('button', { name: 'Close' }).click()
+  await closeDialog(settings)
 
   settings = await connect(page)
   await expect(settings.getByText('Secret gists are unlisted, not private:')).toBeVisible()
   await settings.getByRole('button', { name: 'Create a secret gist for “Ogre cave”' }).click()
   await expect(settings.getByText('Everything is saved to the gist.')).toBeVisible()
-  await settings.getByRole('button', { name: 'Close' }).click()
+  await closeDialog(settings)
   await expect(page.getByRole('button', { name: 'Gist: synced' })).toBeVisible()
 
   const [gist] = [...github.gists.values()]
